@@ -10,14 +10,17 @@ export const metadata: Metadata = {
   description: "Clean reef essentials with an easy checkout and customer dashboard.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <body>
-        <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
+        <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_ID} />
         <MicrosoftClarity clarityId={process.env.NEXT_PUBLIC_CLARITY_ID} />
 
-        {/* @ts-expect-error Async Server Component */}
         <Nav />
         <main className="min-h-[70vh]">{children}</main>
         <Footer />
