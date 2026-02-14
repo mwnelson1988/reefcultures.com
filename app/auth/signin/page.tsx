@@ -2,12 +2,13 @@ import { Container } from "@/components/Container";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 
-export default function SignInPage({
+export default async function SignInPage({
   searchParams,
 }: {
-  searchParams?: { next?: string };
+  searchParams?: Promise<{ next?: string }>;
 }) {
-  const next = searchParams?.next ?? "/dashboard";
+  const sp = (await searchParams) ?? {};
+  const next = sp.next ?? "/dashboard";
 
   return (
     <Container className="py-14">
