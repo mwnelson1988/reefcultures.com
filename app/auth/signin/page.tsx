@@ -2,7 +2,11 @@ import { Container } from "@/components/Container";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 
-export default function SignInPage({ searchParams }: { searchParams: { next?: string } }) {
+export default function SignInPage({
+  searchParams,
+}: {
+  searchParams?: { next?: string };
+}) {
   const next = searchParams?.next ?? "/dashboard";
 
   return (
@@ -12,7 +16,7 @@ export default function SignInPage({ searchParams }: { searchParams: { next?: st
         <p className="mt-3 opacity-85">Access your dashboard and future order history.</p>
 
         <Card className="mt-8">
-          <form action="/auth/signin" method="post" className="space-y-4">
+          <form action="/api/auth/signin" method="post" className="space-y-4">
             <input type="hidden" name="next" value={next} />
             <div>
               <label className="text-sm opacity-85">Email</label>
@@ -33,11 +37,16 @@ export default function SignInPage({ searchParams }: { searchParams: { next?: st
               />
             </div>
 
-            <Button type="submit" className="w-full">Sign in</Button>
+            <Button type="submit" className="w-full">
+              Sign in
+            </Button>
           </form>
 
           <div className="mt-4 text-sm opacity-80">
-            No account? <a className="underline" href="/auth/signup">Create one</a>
+            No account?{" "}
+            <a className="underline" href="/auth/signup">
+              Create one
+            </a>
           </div>
         </Card>
       </div>
