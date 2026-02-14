@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reefcultures Brand Palette */
+:root{
+  --brand-bg: 6 18 28;
+  --brand-fg: 235 245 255;
+  --brand-primary: 0 170 160;
+  --brand-secondary: 0 95 140;
+  --brand-accent: 255 110 70;
+  --brand-muted: 15 32 45;
+  --brand-card: 10 24 36;
+  --brand-border: 30 60 80;
+}
+
+html, body { height: 100%; }
+body {
+  background: rgb(var(--brand-bg));
+  color: rgb(var(--brand-fg));
+}
+a { color: inherit; text-decoration: none; }
