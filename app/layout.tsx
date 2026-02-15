@@ -17,17 +17,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-black text-white">
+      <body className="min-h-screen flex flex-col text-white">
         <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_ID} />
         <MicrosoftClarity clarityId={process.env.NEXT_PUBLIC_CLARITY_ID} />
 
         <Nav />
 
-        {/* CENTERED CONTENT WRAPPER */}
-        <main className="flex justify-center px-4">
-          <div className="w-full max-w-6xl">
-            {children}
-          </div>
+        <main className="flex-1 w-full flex justify-center">
+          <div className="w-full max-w-5xl px-6 pt-8 pb-10">{children}</div>
         </main>
 
         <Footer />

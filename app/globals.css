@@ -2,21 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Reefcultures Brand Palette */
+/* Reefcultures — cleaner, more professional ocean palette */
 :root{
-  --brand-bg: 6 18 28;
-  --brand-fg: 235 245 255;
-  --brand-primary: 0 170 160;
-  --brand-secondary: 0 95 140;
-  --brand-accent: 255 110 70;
-  --brand-muted: 15 32 45;
-  --brand-card: 10 24 36;
-  --brand-border: 30 60 80;
+  /* Base */
+  --brand-bg: 7 20 30;        /* deep ocean */
+  --brand-fg: 236 248 255;    /* crisp white-blue */
+
+  /* Brand accents (match logo vibe) */
+  --brand-primary: 0 184 170;     /* teal */
+  --brand-secondary: 46 140 255;  /* reef-blue */
+  --brand-accent: 255 122 64;     /* warm coral (sparingly) */
+
+  /* Surfaces */
+  --brand-muted: 11 32 44;
+  --brand-card: 12 34 48;
+  --brand-border: 60 110 140;
 }
 
 html, body { height: 100%; }
+
 body {
-  background: rgb(var(--brand-bg));
   color: rgb(var(--brand-fg));
+  background:
+    radial-gradient(900px 500px at 50% -10%, rgba(0,184,170,0.22), transparent 60%),
+    radial-gradient(700px 420px at 85% 10%, rgba(46,140,255,0.14), transparent 60%),
+    radial-gradient(650px 420px at 15% 25%, rgba(0,184,170,0.10), transparent 65%),
+    linear-gradient(to bottom, rgb(10 28 40), rgb(var(--brand-bg)));
+  background-attachment: fixed;
 }
+
 a { color: inherit; text-decoration: none; }
+
+/* Make form controls feel consistent and less “yellow-ish” looking */
+input, textarea, select {
+  color-scheme: dark;
+}
+
+/* Optional: nicer focus ring everywhere */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0,184,170,0.25);
+  border-radius: 12px;
+}

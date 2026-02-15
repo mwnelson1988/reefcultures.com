@@ -1,21 +1,36 @@
-import Link from "next/link";
-import { Container } from "./Container";
-
 export function Footer() {
   return (
-    <footer className="mt-16 border-t border-brand-border">
-      <Container className="py-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-        <div className="text-sm opacity-80">
-          <div className="font-semibold opacity-100">Reefcultures</div>
-          <div>© {new Date().getFullYear()} Reefcultures. All rights reserved.</div>
+    <footer className="border-t border-white/10 mt-20">
+      <div className="max-w-6xl mx-auto px-6 py-10 text-center">
+
+        {/* Navigation Links */}
+        <div className="flex justify-center gap-8 text-sm text-white/60 mb-6">
+          <a
+            href="/privacy"
+            className="hover:text-white transition-colors"
+          >
+            Privacy
+          </a>
+          <a
+            href="/terms"
+            className="hover:text-white transition-colors"
+          >
+            Terms
+          </a>
+          <a
+            href="/contact"
+            className="hover:text-white transition-colors"
+          >
+            Contact
+          </a>
         </div>
 
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          <Link className="opacity-80 hover:opacity-100" href="/privacy">Privacy</Link>
-          <Link className="opacity-80 hover:opacity-100" href="/terms">Terms</Link>
-          <Link className="opacity-80 hover:opacity-100" href="/contact">Contact</Link>
+        {/* Copyright */}
+        <div className="text-xs text-white/40">
+          © {new Date().getFullYear()} Reefcultures. All rights reserved.
         </div>
-      </Container>
+
+      </div>
     </footer>
   );
 }
