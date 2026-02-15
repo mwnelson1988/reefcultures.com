@@ -1,59 +1,112 @@
-import Link from "next/link";
-import { Container } from "@/components/Container";
+// app/coming-soon/page.tsx
 
-type Props = {
-  searchParams?: { from?: string; openAt?: string };
+type SearchParams = {
+  from?: string;
+  openAt?: string;
 };
 
-function formatDate(iso?: string) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-}
+type Props = {
+  // Next.js 15+ generated types often treat searchParams as Promise-based
+  searchParams?: Promise<SearchParams>;
+};
 
-export default function ComingSoonPage({ searchParams }: Props) {
-  const from = searchParams?.from || "this section";
-  const openAtLabel = formatDate(searchParams?.openAt);
-  const sectionLabel =
-    from === "store" ? "The Store" : from === "dashboard" ? "The Dashboard" : "This section";
+export default async function ComingSoonPage({ searchParams }: Props) {
+  const sp = (await searchParams) ?? {};
+  const from = sp.from ?? "";
+  const openAt = sp.openAt ?? "";
 
   return (
-    <Container className="relative overflow-hidden">
-      <div className="pointer-events-none absolute -top-48 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-[rgb(var(--brand-primary))]/12 blur-[190px]" />
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+      }}
+    >
+      <section
+        style={{
+          width: "100%",
+          maxWidth: "720px",
+          border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: "16px",
+          padding: "28px",
+          background: "rgba(0,0,0,0.25)",
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        <h1 style={{ fontSize: "32px", margin: "0 0 10px 0" }}>
+          Reefcultures is coming soon
+        </h1>
 
-      <section className="relative mx-auto max-w-2xl px-4 pt-12 pb-16">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.045] backdrop-blur-xl shadow-xl px-8 py-10 text-center">
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">
-            Coming Soon
-          </h1>
+        <p style={{ margin: "0 0 18px 0", opacity: 0.9, lineHeight: 1.6 }}>
+          We’re building the full site right now. Early Access signups get 20% off
+          before launch.
+        </p>
 
-          <p className="mt-3 text-sm md:text-base text-white/75 leading-relaxed">
-            {sectionLabel} is not open to the public yet.
-          </p>
-
-          {openAtLabel ? (
-            <p className="mt-2 text-sm text-white/65">
-              Planned opening: <span className="text-white/85 font-medium">{openAtLabel}</span>
-            </p>
-          ) : null}
-
-          <div className="mt-7 flex items-center justify-center gap-4">
-            <Link
-              href="/"
-              className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10 transition"
-            >
-              Back to Home
-            </Link>
-            <Link
-              href="/auth/signup"
-              className="rounded-xl border border-white/10 bg-[rgb(var(--brand-primary))]/20 px-5 py-3 text-sm font-semibold text-white hover:bg-[rgb(var(--brand-primary))]/25 transition"
-            >
-              Get Early Access
-            </Link>
+        {(from || openAt) && (
+          <div
+            style={{
+              marginTop: "14px",
+              padding: "12px 14px",
+              borderRadius: "12px",
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.06)",
+              fontSize: "14px",
+              lineHeight: 1.5,
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: "6px" }}>
+              Debug / tracking params detected:
+            </div>
+            {from && (
+              <div>
+                <strong>from:</strong> {from}
+              </div>
+            )}
+            {openAt && (
+              <div>
+                <strong>openAt:</strong> {openAt}
+              </div>
+            )}
           </div>
+        )}
+
+        <div style={{ marginTop: "22px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
+          <a
+            href="/"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "10px 14px",
+              borderRadius: "12px",
+              textDecoration: "none",
+              border: "1px solid rgba(255,255,255,0.18)",
+              color: "inherit",
+            }}
+          >
+            Home
+          </a>
+
+          <a
+            href="/early-access"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "10px 14px",
+              borderRadius: "12px",
+              textDecoration: "none",
+              border: "1px solid rgba(255,255,255,0.18)",
+              color: "inherit",
+            }}
+          >
+            Early Access
+          </a>
         </div>
       </section>
-    </Container>
+    </main>
   );
 }
