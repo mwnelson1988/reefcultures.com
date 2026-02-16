@@ -10,8 +10,9 @@ export const config = {
     /**
      * Run middleware on everything EXCEPT:
      * - Next.js internals
+     * - API routes
      * - common static assets (images, icons, css/js, etc.)
      */
-    "/((?!_next/static|_next/image|favicon.ico|favicon.png|logo.png|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|map)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|favicon.png|logo.png|robots.txt|sitemap.xml|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|map)$).*)",
   ],
 };
