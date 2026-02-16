@@ -10,8 +10,7 @@ export async function Nav() {
 
   // 🔐 Admin bypass detection (server-side)
   const cookieStore = await cookies();
-  const isAdminBypass =
-    cookieStore.get("rc_admin_bypass")?.value === "1";
+  const isAdminBypass = cookieStore.get("rc_admin_bypass")?.value === "1";
 
   return (
     <header className="sticky top-0 z-50 border-b border-brand-border bg-brand-bg/70 backdrop-blur">
@@ -24,6 +23,7 @@ export async function Nav() {
             width={200}
             height={80}
             priority
+            unoptimized
             className="h-16 w-auto"
           />
         </Link>
