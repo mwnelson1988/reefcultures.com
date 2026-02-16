@@ -103,7 +103,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true });
     }
     if (seconds > 60 * 60) {
-      return NextResponse.json({ error: "Form expired. Please resubmit." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Form expired. Please resubmit." },
+        { status: 400 }
+      );
     }
 
     // Normal validation
@@ -120,50 +123,55 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Message is required." }, { status: 400 });
     }
 
-    // ENV validation (IMPORTANT: do this BEFORE creating Resend client)
+    // ENV validation
     const apiKey = (process.env.RESEND_API_KEY || "").trim();
     if (!apiKey) {
       return NextResponse.json({ error: "Missing RESEND_API_KEY" }, { status: 500 });
     }
 
-    const from = (process.env.RESEND_FROM_EMAIL || "").trim();
-    if (!from) {
-      return NextResponse.json({ error: "Missing RESEND_FROM_EMAIL" }, { status: 500 });
-    }
+    // ✅ Production-safe sender (must be verified domain)
+    // If you want to control this via env, set RESEND_FROM_EMAIL to:
+    // ReefCultures <support@reefcultures.com>
+    const from =
+      (process.env.RESEND_FROM_EMAIL || "").trim() ||
+      "ReefCultures <support@reefcultures.com>";
 
+    // ✅ Where messages go
     const toEnv = (process.env.CONTACT_TO_EMAIL || "").trim();
-    const to = (toEnv || "support@reefcultures.com")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const to =
+      (toEnv || "support@reefcultures.com")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
 
-    // Create Resend client ONLY after env is confirmed
     const resend = new Resend(apiKey);
 
-    const subject = `Reef Cultures Contact – ${String(reason || "General Request")}`;
+    const subject = `ReefCultures Contact – ${String(reason || "General Request")}${
+      orderNumber ? ` (Order: ${String(orderNumber).trim()})` : ""
+    }`;
 
-    // Resend SDK returns { data, error }
+    const text = [
+      `Name: ${String(name).trim()}`,
+      `Email: ${String(email).trim()}`,
+      reason ? `Reason: ${String(reason).trim()}` : null,
+      orderNumber ? `Order #: ${String(orderNumber).trim()}` : null,
+      "",
+      "Message:",
+      String(message).trim(),
+    ]
+      .filter(Boolean)
+      .join("\n");
+
     const { data, error } = await resend.emails.send({
       from,
       to,
       subject,
+      // ✅ Reply-to is the customer so you can hit "Reply" in Gmail
       replyTo: String(email).trim(),
-      text: [
-        `Name: ${String(name).trim()}`,
-        `Email: ${String(email).trim()}`,
-        `Reason: ${String(reason || "N/A")}`,
-        `Order Number: ${String(orderNumber || "N/A")}`,
-        "",
-        "Message:",
-        String(message).trim(),
-        "",
-        `IP: ${ip}`,
-        `Time to submit: ${seconds.toFixed(1)}s`,
-      ].join("\n"),
+      text,
     });
 
     if (error) {
-      // Log to Vercel Runtime Logs (safe)
       console.error("Resend send error:", error);
       return NextResponse.json(
         { error: error.message || "Email send failed" },
