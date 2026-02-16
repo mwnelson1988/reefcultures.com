@@ -10,8 +10,6 @@ const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const RATE_LIMIT_MAX = 5; // 5 submissions per window per IP
 const rateMap = new Map<string, RateEntry>();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 function getClientIp(req: Request) {
   const xf = req.headers.get("x-forwarded-for");
   if (xf) return xf.split(",")[0].trim();
@@ -38,12 +36,27 @@ function rateLimit(ip: string) {
   return { allowed: true, remaining: RATE_LIMIT_MAX - entry.count };
 }
 
+function isValidEmail(v: unknown) {
+  if (typeof v !== "string") return false;
+  const s = v.trim();
+  if (!s) return false;
+  // Simple email validation (good enough for contact form)
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+/**
+ * Helpful for checking if the route is alive.
+ * Visiting /api/contact in a browser does a GET.
+ */
+export async function GET() {
+  return NextResponse.json(
+    { ok: true, message: "Contact API is up. Use POST to send messages." },
+    { status: 200 }
+  );
+}
+
 export async function POST(req: Request) {
   try {
-    if (!process.env.RESEND_API_KEY) {
-      return NextResponse.json({ error: "Missing RESEND_API_KEY" }, { status: 500 });
-    }
-
     // Rate limit by IP
     const ip = getClientIp(req);
     const rl = rateLimit(ip);
@@ -54,7 +67,13 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json();
+    // Parse body safely
+    let body: any = null;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
 
     const {
       name,
@@ -62,7 +81,6 @@ export async function POST(req: Request) {
       reason,
       orderNumber,
       message,
-
       // Spam protection fields
       website, // honeypot - should be empty
       startedAt, // ms timestamp from client
@@ -74,8 +92,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true });
     }
 
-    // Time-to-submit check: bots often submit instantly
-    // Require at least 3 seconds from page load to submit
+    // Time-to-submit check
     const now = Date.now();
     const started = Number(startedAt);
     if (!Number.isFinite(started)) {
@@ -83,61 +100,80 @@ export async function POST(req: Request) {
     }
     const seconds = (now - started) / 1000;
     if (seconds < 3) {
-      // Too fast = likely bot
       return NextResponse.json({ success: true });
     }
-    // Optional: reject super-old forms (copy/paste bot)
     if (seconds > 60 * 60) {
       return NextResponse.json({ error: "Form expired. Please resubmit." }, { status: 400 });
     }
 
     // Normal validation
-    if (!name || !email || !message) {
+    if (typeof name !== "string" || !name.trim()) {
+      return NextResponse.json({ error: "Name is required." }, { status: 400 });
+    }
+    if (!isValidEmail(email)) {
       return NextResponse.json(
-        { error: "Missing required fields (name, email, message)." },
+        { error: "Invalid email address. Use email@example.com format." },
         { status: 400 }
       );
     }
+    if (typeof message !== "string" || !message.trim()) {
+      return NextResponse.json({ error: "Message is required." }, { status: 400 });
+    }
 
-    const from =
-      process.env.RESEND_FROM_EMAIL?.trim() || "Reef Cultures <onboarding@resend.dev>";
+    // ENV validation (IMPORTANT: do this BEFORE creating Resend client)
+    const apiKey = (process.env.RESEND_API_KEY || "").trim();
+    if (!apiKey) {
+      return NextResponse.json({ error: "Missing RESEND_API_KEY" }, { status: 500 });
+    }
 
-    const toEnv = process.env.CONTACT_TO_EMAIL?.trim() || "support@reefcultures.com";
-    const to = toEnv.split(",").map((s) => s.trim()).filter(Boolean);
+    const from = (process.env.RESEND_FROM_EMAIL || "").trim();
+    if (!from) {
+      return NextResponse.json({ error: "Missing RESEND_FROM_EMAIL" }, { status: 500 });
+    }
 
-    const subject = `Reef Cultures Contact – ${reason || "General Request"}`;
+    const toEnv = (process.env.CONTACT_TO_EMAIL || "").trim();
+    const to = (toEnv || "support@reefcultures.com")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-    const result = await resend.emails.send({
+    // Create Resend client ONLY after env is confirmed
+    const resend = new Resend(apiKey);
+
+    const subject = `Reef Cultures Contact – ${String(reason || "General Request")}`;
+
+    // Resend SDK returns { data, error }
+    const { data, error } = await resend.emails.send({
       from,
       to,
       subject,
-      replyTo: String(email),
+      replyTo: String(email).trim(),
       text: [
-        `Name: ${String(name)}`,
-        `Email: ${String(email)}`,
+        `Name: ${String(name).trim()}`,
+        `Email: ${String(email).trim()}`,
         `Reason: ${String(reason || "N/A")}`,
         `Order Number: ${String(orderNumber || "N/A")}`,
         "",
         "Message:",
-        String(message),
+        String(message).trim(),
         "",
         `IP: ${ip}`,
         `Time to submit: ${seconds.toFixed(1)}s`,
       ].join("\n"),
     });
 
-    // If Resend returns an error, do not pretend success
-    // @ts-ignore
-    if (result?.error) {
-      // @ts-ignore
+    if (error) {
+      // Log to Vercel Runtime Logs (safe)
+      console.error("Resend send error:", error);
       return NextResponse.json(
-        { error: result.error.message || "Email send failed" },
+        { error: error.message || "Email send failed" },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, id: data?.id });
   } catch (err: any) {
+    console.error("Contact API error:", err);
     return NextResponse.json(
       { error: err?.message || "Something went wrong" },
       { status: 500 }
