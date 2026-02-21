@@ -2,9 +2,9 @@ export type Product = {
   id: string;
   name: string;
   description: string;
-  priceCents: number; // Stripe expects cents
+  priceCents: number;
   image: string;
-  bullets: string[];  // <-- REQUIRED by ProductCard
+  bullets: string[];
 };
 
 export const products: Product[] = [
@@ -16,7 +16,7 @@ export const products: Product[] = [
     image: "/phyto-16oz.png",
     bullets: [
       "Live phytoplankton for reef tanks",
-      "Supports copepod & filter feeder nutrition",
+      "Supports copepods & filter feeders",
       "Refrigerate on arrival",
     ],
   },
@@ -28,7 +28,7 @@ export const products: Product[] = [
     image: "/phyto-32oz.png",
     bullets: [
       "Best value for frequent dosing",
-      "Supports copepod & filter feeder nutrition",
+      "Supports copepods & filter feeders",
       "Refrigerate on arrival",
     ],
   },
