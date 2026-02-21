@@ -9,3 +9,4 @@ dist
 .vercel
 
 /generated/prisma
+github_pat_*
