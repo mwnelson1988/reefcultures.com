@@ -1,30 +1,53 @@
+import * as React from "react";
 import Link from "next/link";
-import clsx from "clsx";
-import { ReactNode } from "react";
 
-type Props =
-  | { href: string; children: ReactNode; className?: string }
-  | { onClick?: () => void; children: ReactNode; className?: string; type?: "button" | "submit" };
+type Variant = "primary" | "secondary" | "ghost";
 
-export function Button(props: Props) {
-  const common = clsx(
-    "inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold",
-    "bg-brand-primary text-black hover:opacity-90 transition",
-    "focus:outline-none focus:ring-2 focus:ring-brand-accent focus:ring-offset-2 focus:ring-offset-brand-bg",
-    (props as any).className
-  );
+export type ButtonProps =
+  | (React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      variant?: Variant;
+      href?: undefined;
+    })
+  | (React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+      variant?: Variant;
+      href: string; // REQUIRED for link mode
+    });
 
-  if ("href" in props) {
+export function Button(props: ButtonProps) {
+  const variant: Variant = (props as any).variant ?? "primary";
+  const classNameProp = (props as any).className ?? "";
+
+  const base =
+    "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition border";
+
+  const styles =
+    variant === "secondary"
+      ? "bg-white text-black border-black/10 hover:bg-black/5"
+      : variant === "ghost"
+        ? "bg-transparent text-black border-transparent hover:bg-black/5"
+        : "bg-black text-white border-black hover:bg-black/90";
+
+  const className = `${base} ${styles} ${classNameProp}`;
+
+  // LINK MODE (href is required here)
+  if ("href" in props && typeof props.href === "string") {
+    const { href, children, variant: _v, className: _c, ...rest } = props as any;
     return (
-      <Link href={props.href} className={common}>
-        {props.children}
+      <Link href={href} className={className} {...rest}>
+        {children}
       </Link>
     );
   }
 
+  // BUTTON MODE
+  const { children, variant: _v, className: _c, ...rest } = props as any;
+  const disabledStyles = rest.disabled ? " opacity-60 cursor-not-allowed" : "";
+
   return (
-    <button type={props.type ?? "button"} onClick={props.onClick} className={common}>
-      {props.children}
+    <button {...rest} className={className + disabledStyles}>
+      {children}
     </button>
   );
 }
+
+export default Button;
