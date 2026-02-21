@@ -2,176 +2,218 @@ import { NextResponse } from "next/server";
 import { products } from "@/lib/store/products";
 
 /**
- * ShipStation API (ShipEngine rebrand) live rate shopping.
- * - We return a simplified "Shippo-like" shape so the existing frontend keeps working.
- * Docs:
- *  - POST https://api.shipstation.com/v2/rates
+ * LIVE SHIPPING RATES (ShipStation API / ShipEngine)
+ *
+ * Expected request body:
+ * {
+ *   "name": "Full Name",
+ *   "address1": "123 Main St",
+ *   "address2": "",
+ *   "city": "St Louis",
+ *   "state": "MO",
+ *   "zip": "63101",
+ *   "country": "US",
+ *   "quantity": 1,
+ *   "productId": "phyto-16oz"   // must match your products list
+ * }
  */
 
-type AddressInput = {
-  name?: string;
-  street1: string;
-  street2?: string;
+type RateRequest = {
+  name: string;
+  address1: string;
+  address2?: string;
   city: string;
   state: string;
   zip: string;
-  country?: string; // default US
+  country?: string;
+  quantity?: number;
+  productId: string;
 };
 
-function reqEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing ${name} env var.`);
-  return v;
-}
-
 function toInt(val: string | undefined, fallback: number) {
-  const n = Number(val);
+  const n = Number.parseInt(String(val ?? ""), 10);
   return Number.isFinite(n) ? n : fallback;
 }
 
-function centsFromAmount(amount: number | string) {
-  const n = typeof amount === "string" ? Number(amount) : amount;
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.round(n * 100));
-}
+/**
+ * Weights are in ounces (oz).
+ * You can override via env vars if you want later.
+ */
+function getTotalWeightOz(product: { name?: string } | undefined, quantity: number) {
+  const w16 = toInt(process.env.WEIGHT_16OZ_OZ, 28); // default: ~28oz packed (bottle + liquid + packaging)
+  const w32 = toInt(process.env.WEIGHT_32OZ_OZ, 48); // default: ~48oz packed
 
-function buildShipFrom() {
-  return {
-    name: process.env.SHIP_FROM_NAME || "ReefCultures",
-    phone: process.env.SHIP_FROM_PHONE || undefined,
-    email: process.env.SHIP_FROM_EMAIL || undefined,
-    address_line1: reqEnv("SHIP_FROM_STREET1"),
-    address_line2: process.env.SHIP_FROM_STREET2 || undefined,
-    city_locality: reqEnv("SHIP_FROM_CITY"),
-    state_province: reqEnv("SHIP_FROM_STATE"),
-    postal_code: reqEnv("SHIP_FROM_ZIP"),
-    country_code: (process.env.SHIP_FROM_COUNTRY || "US").toUpperCase(),
-    address_residential_indicator: "unknown",
-  } as const;
-}
+  // If you later add product.sizeOz somewhere, we’ll respect it without requiring the type.
+  const anyProduct = product as any;
 
-function buildShipTo(address: AddressInput) {
-  return {
-    name: address.name || "Customer",
-    address_line1: address.street1,
-    address_line2: address.street2 || undefined,
-    city_locality: address.city,
-    state_province: address.state,
-    postal_code: address.zip,
-    country_code: (address.country || "US").toUpperCase(),
-    address_residential_indicator: "unknown",
-  } as const;
-}
+  const sizeOzFromField =
+    typeof anyProduct?.sizeOz === "number" ? anyProduct.sizeOz : undefined;
 
-function productWeightOz(productId: string, quantity: number) {
-  const p = products.find((x) => x.id === productId);
-  if (!p) throw new Error("Unknown product.");
+  const name = (product?.name ?? "").toLowerCase();
 
-  // Defaults are in .env.example — tune once you weigh your packed shipments.
-  const w16 = toInt(process.env.WEIGHT_16OZ_OZ, 32);
-  const w32 = toInt(process.env.WEIGHT_32OZ_OZ, 48);
+  const sizeOzFromName =
+    name.includes("16") ? 16 :
+    name.includes("32") ? 32 :
+    undefined;
 
-  const unitOz = p.sizeOz === 16 ? w16 : w32;
+  const sizeOz = sizeOzFromField ?? sizeOzFromName ?? 32;
+
+  const unitOz = sizeOz === 16 ? w16 : w32;
   const totalOz = Math.max(1, unitOz * Math.max(1, quantity));
   return totalOz;
 }
 
 export async function POST(req: Request) {
   try {
-    const apiKey = reqEnv("SHIPSTATION_API_KEY");
-
-    const body = await req.json().catch(() => null);
-    if (!body) return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-
-    const productId = String(body.productId || "");
-    const quantity = Math.max(1, Number(body.quantity || 1));
-    const address: AddressInput | undefined = body.address;
-
-    if (!productId || !address?.street1 || !address?.city || !address?.state || !address?.zip) {
-      return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
-    }
-
-    // Parcel defaults (inches + ounces)
-    const length = toInt(process.env.PARCEL_LENGTH_IN, 8);
-    const width = toInt(process.env.PARCEL_WIDTH_IN, 6);
-    const height = toInt(process.env.PARCEL_HEIGHT_IN, 6);
-    const totalOz = productWeightOz(productId, quantity);
-
-    const shipmentRequest = {
-      ship_to: buildShipTo(address),
-      ship_from: buildShipFrom(),
-      packages: [
-        {
-          package_code: "package",
-          weight: { value: totalOz, unit: "ounce" },
-          // Dimensions are optional, but help rate accuracy for some carriers.
-          dimensions: { unit: "inch", length, width, height },
-        },
-      ],
-    };
-
-    // Rate options: keep it broad so the customer can pick cheapest / fastest.
-    // You can later restrict by carrier_ids or service_codes if you want.
-    const rateOptions = {
-      calculate_tax_amount: false,
-      preferred_currency: "usd",
-    };
-
-    const res = await fetch("https://api.shipstation.com/v2/rates", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": apiKey,
-      },
-      body: JSON.stringify({
-        shipment_request: shipmentRequest,
-        rate_options: rateOptions,
-      }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
+    const apiKey = process.env.SHIPSTATION_API_KEY;
+    if (!apiKey) {
       return NextResponse.json(
-        { error: data?.message || data?.error || "Failed to fetch shipping rates." },
-        { status: res.status }
+        { error: "Missing SHIPSTATION_API_KEY env var" },
+        { status: 500 }
       );
     }
 
-    // Expected response shape (simplified):
-    // data.rate_response.rates[] with rate_id, carrier_friendly_name, service_type, shipping_amount
-    const rateResponse = data?.rate_response || {};
-    const shipmentId = String(rateResponse?.shipment_id || data?.shipment_id || "");
-    const rates = Array.isArray(rateResponse?.rates) ? rateResponse.rates : [];
+    const body = (await req.json()) as RateRequest;
 
-    const mappedRates = rates
-      .filter((r: any) => r && r.rate_id && r.shipping_amount && r.shipping_amount.amount != null)
-      .map((r: any) => ({
-        // Frontend currently expects Shippo-ish fields
-        object_id: String(r.rate_id),
-        provider: String(r.carrier_friendly_name || r.carrier_code || "Carrier"),
-        servicelevel: {
-          name: String(r.service_type || r.service_code || "Service"),
-          token: String(r.service_code || r.service_type || ""),
-        },
-        amount: String(r.shipping_amount.amount),
-        currency: String((r.shipping_amount.currency || "usd").toUpperCase()),
-        estimated_days: typeof r.delivery_days === "number" ? r.delivery_days : undefined,
-        // Keep extra fields if you want them later
-        _raw: {
-          carrier_id: r.carrier_id ?? null,
-          service_code: r.service_code ?? null,
-          package_type: r.package_type ?? null,
-          rate_type: r.rate_type ?? null,
-        },
-      }));
+    const {
+      name,
+      address1,
+      address2,
+      city,
+      state,
+      zip,
+      country = "US",
+      quantity = 1,
+      productId,
+    } = body;
 
-    if (!shipmentId) {
-      // Some accounts may not return shipment_id for certain workflows; still return rates.
-      return NextResponse.json({ shipmentId: "", rates: mappedRates });
+    if (!address1 || !city || !state || !zip || !productId) {
+      return NextResponse.json(
+        { error: "Missing required address fields or productId" },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ shipmentId, rates: mappedRates });
+    // Find the product in your store list
+    const product = products.find((p: any) => p.id === productId);
+
+    // Calculate total weight
+    const totalWeightOz = getTotalWeightOz(product, quantity);
+
+    // You can tune package dimensions via env vars if desired
+    const length = toInt(process.env.PACKAGE_LENGTH_IN, 9);
+    const width = toInt(process.env.PACKAGE_WIDTH_IN, 6);
+    const height = toInt(process.env.PACKAGE_HEIGHT_IN, 4);
+
+    // Ship-from (set these in env if you want)
+    const shipFromPostal = process.env.SHIP_FROM_POSTAL_CODE ?? "63366";
+    const shipFromState = process.env.SHIP_FROM_STATE ?? "MO";
+    const shipFromCity = process.env.SHIP_FROM_CITY ?? "O'Fallon";
+    const shipFromCountry = process.env.SHIP_FROM_COUNTRY ?? "US";
+
+    /**
+     * ShipStation API v2 - Rate shopping endpoint.
+     * NOTE: ShipStation API uses Bearer auth for API keys in many setups.
+     * If your key requires Basic auth instead, tell me and I’ll swap it.
+     */
+    const rateReqPayload = {
+      shipment: {
+        ship_from: {
+          postal_code: shipFromPostal,
+          state_code: shipFromState,
+          city_locality: shipFromCity,
+          country_code: shipFromCountry,
+        },
+        ship_to: {
+          name,
+          address_line1: address1,
+          address_line2: address2 ?? "",
+          city_locality: city,
+          state_province: state,
+          postal_code: zip,
+          country_code: country,
+        },
+        packages: [
+          {
+            weight: {
+              value: totalWeightOz,
+              unit: "ounce",
+            },
+            dimensions: {
+              unit: "inch",
+              length,
+              width,
+              height,
+            },
+          },
+        ],
+      },
+    };
+
+    const resp = await fetch("https://api.shipstation.com/v2/rates", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(rateReqPayload),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      return NextResponse.json(
+        { error: "ShipStation rate request failed", details: text },
+        { status: 502 }
+      );
+    }
+
+    const data = await resp.json();
+
+    /**
+     * Normalize the response for your frontend.
+     * Your UI expects something like:
+     * { shipmentId, rates: [{ rate_id, service, carrier, amount, delivery_days }] }
+     */
+    const shipmentId =
+      data?.shipment_id ??
+      data?.shipment?.shipment_id ??
+      null;
+
+    const ratesRaw: any[] = Array.isArray(data?.rates)
+      ? data.rates
+      : Array.isArray(data)
+        ? data
+        : [];
+
+    const rates = ratesRaw
+      .map((r) => {
+        const amount =
+          typeof r?.shipping_amount?.amount === "number"
+            ? r.shipping_amount.amount
+            : typeof r?.rate === "number"
+              ? r.rate
+              : typeof r?.amount === "number"
+                ? r.amount
+                : null;
+
+        return {
+          rate_id: r?.rate_id ?? r?.id ?? null,
+          carrier: r?.carrier_code ?? r?.carrier ?? null,
+          service: r?.service_code ?? r?.service ?? null,
+          amount, // number (usually USD)
+          delivery_days: r?.delivery_days ?? r?.estimated_delivery_days ?? null,
+        };
+      })
+      .filter((r) => r.rate_id && typeof r.amount === "number");
+
+    return NextResponse.json({
+      shipmentId,
+      rates,
+    });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Server error." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Unexpected error in shipping-rates route", details: String(err?.message ?? err) },
+      { status: 500 }
+    );
   }
 }
