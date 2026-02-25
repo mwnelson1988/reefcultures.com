@@ -36,6 +36,14 @@ export async function createSupabaseServerClient() {
 }
 
 /**
+ * Backwards-compatible alias for route handlers importing `supabaseServer`.
+ * Usage: const supabase = await supabaseServer();
+ */
+export async function supabaseServer() {
+  return createSupabaseServerClient();
+}
+
+/**
  * Server-safe session helper for layouts/nav.
  */
 export async function getSessionUser() {

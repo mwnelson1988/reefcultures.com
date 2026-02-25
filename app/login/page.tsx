@@ -1,10 +1,41 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-export default function LoginPage({ searchParams }: { searchParams?: { redirectTo?: string } }) {
-  const redirectTo = useMemo(() => searchParams?.redirectTo || "/account", [searchParams]);
+type SearchParams = { redirectTo?: string };
+
+export default function LoginPage({
+  searchParams,
+}: {
+  // ✅ Your project’s PageProps expects searchParams as a Promise
+  searchParams?: Promise<SearchParams>;
+}) {
+  const [resolved, setResolved] = useState<SearchParams | undefined>(undefined);
+
+  // ✅ Resolve the Promise on the client
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const sp = (await searchParams) ?? undefined;
+        if (alive) setResolved(sp);
+      } catch {
+        if (alive) setResolved(undefined);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [searchParams]);
+
+  const redirectTo = useMemo(
+    () => resolved?.redirectTo || "/account",
+    [resolved]
+  );
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,9 +52,9 @@ export default function LoginPage({ searchParams }: { searchParams?: { redirectT
       body: JSON.stringify({ email, password }),
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError(data?.error || "Login failed");
+      setError((data as any)?.error || "Login failed");
       setLoading(false);
       return;
     }
@@ -44,7 +75,9 @@ export default function LoginPage({ searchParams }: { searchParams?: { redirectT
           <div className="mt-10 border border-hair bg-panel/20 p-8">
             <form onSubmit={onSubmit} className="grid gap-5">
               <div>
-                <label className="block text-[12px] uppercase tracking-[0.18em] text-muted">Email</label>
+                <label className="block text-[12px] uppercase tracking-[0.18em] text-muted">
+                  Email
+                </label>
                 <input
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -53,8 +86,11 @@ export default function LoginPage({ searchParams }: { searchParams?: { redirectT
                   className="mt-2 w-full rounded-none bg-bg border border-hair px-4 py-3 text-ink outline-none focus:border-accent"
                 />
               </div>
+
               <div>
-                <label className="block text-[12px] uppercase tracking-[0.18em] text-muted">Password</label>
+                <label className="block text-[12px] uppercase tracking-[0.18em] text-muted">
+                  Password
+                </label>
                 <input
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -64,9 +100,7 @@ export default function LoginPage({ searchParams }: { searchParams?: { redirectT
                 />
               </div>
 
-              {error ? (
-                <div className="text-sm text-red-300">{error}</div>
-              ) : null}
+              {error ? <div className="text-sm text-red-300">{error}</div> : null}
 
               <button
                 type="submit"

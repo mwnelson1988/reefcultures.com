@@ -1,5 +1,6 @@
+// app/api/shipping-rates/route.ts
 import { NextResponse } from "next/server";
-import { products } from "@/lib/store/products";
+import { products, type Product } from "@/lib/store/products";
 
 /**
  * LIVE SHIPPING RATES (ShipStation API / ShipEngine)
@@ -14,7 +15,7 @@ import { products } from "@/lib/store/products";
  *   "zip": "63101",
  *   "country": "US",
  *   "quantity": 1,
- *   "productId": "phyto-16oz"   // must match your products list
+ *   "productId": "phyto-16oz"   // must match products[].slug
  * }
  */
 
@@ -27,7 +28,7 @@ type RateRequest = {
   zip: string;
   country?: string;
   quantity?: number;
-  productId: string;
+  productId: string; // must match Product.slug
 };
 
 function toInt(val: string | undefined, fallback: number) {
@@ -35,32 +36,35 @@ function toInt(val: string | undefined, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-/**
- * Weights are in ounces (oz).
- * You can override via env vars if you want later.
- */
-function getTotalWeightOz(product: { name?: string } | undefined, quantity: number) {
-  const w16 = toInt(process.env.WEIGHT_16OZ_OZ, 28); // default: ~28oz packed (bottle + liquid + packaging)
-  const w32 = toInt(process.env.WEIGHT_32OZ_OZ, 48); // default: ~48oz packed
+function inferSizeOz(product: Product | undefined): number {
+  if (!product) return 32;
 
-  // If you later add product.sizeOz somewhere, we’ll respect it without requiring the type.
-  const anyProduct = product as any;
+  const size = (product.size ?? "").toLowerCase();
+  const m = size.match(/(\d+)\s*oz/);
+  if (m?.[1]) {
+    const oz = Number.parseInt(m[1], 10);
+    if (Number.isFinite(oz)) return oz;
+  }
 
-  const sizeOzFromField =
-    typeof anyProduct?.sizeOz === "number" ? anyProduct.sizeOz : undefined;
+  const slug = (product.slug ?? "").toLowerCase();
+  const m2 = slug.match(/(\d+)\s*oz/);
+  if (m2?.[1]) {
+    const oz = Number.parseInt(m2[1], 10);
+    if (Number.isFinite(oz)) return oz;
+  }
 
-  const name = (product?.name ?? "").toLowerCase();
+  return 32;
+}
 
-  const sizeOzFromName =
-    name.includes("16") ? 16 :
-    name.includes("32") ? 32 :
-    undefined;
+function getTotalWeightOz(product: Product | undefined, quantity: number) {
+  const w16 = toInt(process.env.WEIGHT_16OZ_OZ, 28);
+  const w32 = toInt(process.env.WEIGHT_32OZ_OZ, 48);
+  const w64 = toInt(process.env.WEIGHT_64OZ_OZ, 80);
 
-  const sizeOz = sizeOzFromField ?? sizeOzFromName ?? 32;
+  const sizeOz = inferSizeOz(product);
+  const unitOz = sizeOz <= 16 ? w16 : sizeOz <= 32 ? w32 : w64;
 
-  const unitOz = sizeOz === 16 ? w16 : w32;
-  const totalOz = Math.max(1, unitOz * Math.max(1, quantity));
-  return totalOz;
+  return Math.max(1, unitOz * Math.max(1, quantity));
 }
 
 export async function POST(req: Request) {
@@ -94,18 +98,21 @@ export async function POST(req: Request) {
       );
     }
 
-    // Find the product in your store list
-    const product = products.find((p: any) => p.id === productId);
+    const product = products.find((p: Product) => p.slug === productId);
 
-    // Calculate total weight
+    if (!product) {
+      return NextResponse.json(
+        { error: "Unknown productId (must match products[].slug)", productId },
+        { status: 400 }
+      );
+    }
+
     const totalWeightOz = getTotalWeightOz(product, quantity);
 
-    // You can tune package dimensions via env vars if desired
     const length = toInt(process.env.PACKAGE_LENGTH_IN, 9);
     const width = toInt(process.env.PACKAGE_WIDTH_IN, 6);
     const height = toInt(process.env.PACKAGE_HEIGHT_IN, 4);
 
-    // Ship-from (set these in env if you want)
     const shipFromPostal =
       process.env.SHIP_FROM_POSTAL_CODE ??
       process.env.SHIP_FROM_ZIP ??
@@ -114,10 +121,6 @@ export async function POST(req: Request) {
     const shipFromCity = process.env.SHIP_FROM_CITY ?? "O'Fallon";
     const shipFromCountry = process.env.SHIP_FROM_COUNTRY ?? "US";
 
-    /**
-     * ShipStation API v2 - Rate shopping endpoint.
-     * Auth uses `API-Key: <key>`.
-     */
     const rateReqPayload = {
       shipment: {
         ship_from: {
@@ -137,16 +140,8 @@ export async function POST(req: Request) {
         },
         packages: [
           {
-            weight: {
-              value: totalWeightOz,
-              unit: "ounce",
-            },
-            dimensions: {
-              unit: "inch",
-              length,
-              width,
-              height,
-            },
+            weight: { value: totalWeightOz, unit: "ounce" },
+            dimensions: { unit: "inch", length, width, height },
           },
         ],
       },
@@ -171,15 +166,8 @@ export async function POST(req: Request) {
 
     const data = await resp.json();
 
-    /**
-     * Normalize the response for your frontend.
-     * Your UI expects something like:
-     * { shipmentId, rates: [{ rate_id, service, carrier, amount, delivery_days }] }
-     */
     const shipmentId =
-      data?.shipment_id ??
-      data?.shipment?.shipment_id ??
-      null;
+      data?.shipment_id ?? data?.shipment?.shipment_id ?? null;
 
     const ratesRaw: any[] = Array.isArray(data?.rates)
       ? data.rates
@@ -202,19 +190,19 @@ export async function POST(req: Request) {
           rate_id: r?.rate_id ?? r?.id ?? null,
           carrier: r?.carrier_code ?? r?.carrier ?? null,
           service: r?.service_code ?? r?.service ?? null,
-          amount, // number (usually USD)
+          amount,
           delivery_days: r?.delivery_days ?? r?.estimated_delivery_days ?? null,
         };
       })
       .filter((r) => r.rate_id && typeof r.amount === "number");
 
-    return NextResponse.json({
-      shipmentId,
-      rates,
-    });
+    return NextResponse.json({ shipmentId, rates });
   } catch (err: any) {
     return NextResponse.json(
-      { error: "Unexpected error in shipping-rates route", details: String(err?.message ?? err) },
+      {
+        error: "Unexpected error in shipping-rates route",
+        details: String(err?.message ?? err),
+      },
       { status: 500 }
     );
   }

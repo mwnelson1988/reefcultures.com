@@ -1,41 +1,38 @@
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import type { CookieOptions } from "@supabase/ssr";
-import { mustGetEnv } from "@/lib/env";
+// app/account/page.tsx
+import { redirect } from "next/navigation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-/**
- * Next.js 15: cookies() is async.
- * Supabase SSR client expects cookie accessors.
- */
+export const dynamic = "force-dynamic";
 
-type CookieToSet = {
-  name: string;
-  value: string;
-  options?: CookieOptions;
-};
+export default async function AccountPage() {
+  const supabase = await createSupabaseServerClient();
 
-export async function createSupabaseServerClient() {
-  const cookieStore = await cookies();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-  return createServerClient(
-    mustGetEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    mustGetEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
-            });
-          } catch {
-            // In Server Components during render, setting cookies can throw.
-            // Middleware/Route Handlers handle refresh flows safely.
-          }
-        },
-      },
-    }
+  if (error || !user) {
+    redirect("/signin"); // change to your actual sign-in route if different
+  }
+
+  return (
+    <main className="mx-auto max-w-3xl px-6 py-10">
+      <h1 className="text-2xl font-semibold">Account</h1>
+
+      <div className="mt-6 rounded-xl border p-5">
+        <p className="text-sm text-gray-500">Signed in as</p>
+        <p className="mt-1 font-medium">{user.email}</p>
+
+        <form action="/api/auth/signout" method="post" className="mt-4">
+          <button
+            type="submit"
+            className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:opacity-90"
+          >
+            Sign out
+          </button>
+        </form>
+      </div>
+    </main>
   );
 }
