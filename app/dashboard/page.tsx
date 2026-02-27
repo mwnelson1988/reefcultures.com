@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Container } from "@/components/Container";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { supabaseServer } from "@/lib/supabase/server";
 import { mustGetOrgId } from "@/lib/org";
+import { isAdmin } from "@/lib/auth/isAdmin";
 
 function centsToUsd(cents: number) {
   const n = Number.isFinite(cents) ? cents : 0;
@@ -25,9 +27,24 @@ type ProfitRow = {
   profit_cents: number;
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
-  const orgId = mustGetOrgId();
   const supabase = await supabaseServer();
+
+  // ✅ must be signed in
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/signin");
+
+  // ✅ must be admin — otherwise send to user dashboard
+  const admin = await isAdmin();
+  if (!admin) redirect("/dashboard/user");
+
+  // ✅ now it's safe to scope org data
+  const orgId = mustGetOrgId();
 
   // 30-day window
   const now = new Date();

@@ -10,20 +10,18 @@ export default async function UserDashboardPage() {
 
   const {
     data: { user },
-    error,
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (error || !user) redirect("/signin");
+  if (userError || !user) redirect("/signin");
 
-  // ✅ If an admin lands here, send them back to the admin dashboard
   const admin = await isAdmin();
   if (admin) redirect("/dashboard");
 
-  // Pull this user's orders
   const { data: orders, error: ordersError } = await supabase
     .from("orders")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("customer_id", user.id) // ✅ your table uses customer_id
     .order("created_at", { ascending: false });
 
   return (
@@ -48,9 +46,15 @@ export default async function UserDashboardPage() {
         <h2 className="text-xl font-semibold">Your Orders</h2>
 
         {ordersError ? (
-          <p className="mt-4 text-sm text-red-300">
-            Couldn’t load orders. (Check RLS/policies on the orders table.)
-          </p>
+          <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+            <div className="font-semibold">Couldn’t load orders.</div>
+            <div className="mt-2 text-xs opacity-90">
+              <div>code: {ordersError.code ?? "—"}</div>
+              <div>message: {ordersError.message}</div>
+              <div>details: {ordersError.details ?? "—"}</div>
+              <div>hint: {ordersError.hint ?? "—"}</div>
+            </div>
+          </div>
         ) : orders && orders.length > 0 ? (
           <div className="mt-6 space-y-4">
             {orders.map((order: any) => (
@@ -64,9 +68,7 @@ export default async function UserDashboardPage() {
                       Order #{order.order_number || String(order.id).slice(0, 8)}
                     </p>
                     <p className="text-sm text-white/60">
-                      {order.created_at
-                        ? new Date(order.created_at).toLocaleDateString()
-                        : ""}
+                      {order.created_at ? new Date(order.created_at).toLocaleDateString() : ""}
                     </p>
                   </div>
 
@@ -76,9 +78,7 @@ export default async function UserDashboardPage() {
                         ? `$${(order.total_amount / 100).toFixed(2)}`
                         : ""}
                     </p>
-                    <p className="text-sm text-white/60 capitalize">
-                      {order.status || ""}
-                    </p>
+                    <p className="text-sm text-white/60 capitalize">{order.status || ""}</p>
                   </div>
                 </div>
               </div>

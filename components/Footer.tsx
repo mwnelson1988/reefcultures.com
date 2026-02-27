@@ -10,10 +10,22 @@ export default function Footer() {
           <div className="text-[12px] uppercase tracking-[0.22em] text-muted">
             ReefCultures
           </div>
+
           <div className="text-xs text-muted leading-relaxed max-w-xs">
             Premium live marine phytoplankton engineered for reef performance.
             Cold-chain shipped from Missouri.
           </div>
+
+          {/* ✅ Trust Signal for Stripe + Customers */}
+          <div className="text-xs text-muted">
+            <a
+              href="mailto:support@reefcultures.com"
+              className="hover:text-ink transition"
+            >
+              support@reefcultures.com
+            </a>
+          </div>
+
           <div className="text-xs text-muted">
             © {new Date().getFullYear()} ReefCultures. All rights reserved.
           </div>
@@ -25,6 +37,7 @@ export default function Footer() {
           <Link href="/science" className="hover:text-ink transition">Science</Link>
           <Link href="/quality" className="hover:text-ink transition">Quality</Link>
           <Link href="/faq" className="hover:text-ink transition">FAQ</Link>
+          <Link href="/contact" className="hover:text-ink transition">Contact</Link>
           <Link href="/terms" className="hover:text-ink transition">Terms</Link>
           <Link href="/privacy" className="hover:text-ink transition">Privacy</Link>
         </div>

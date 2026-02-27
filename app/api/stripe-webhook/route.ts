@@ -59,6 +59,9 @@ export async function POST(req: Request) {
           expand: ["line_items.data.price.product", "payment_intent", "customer"],
         });
 
+        // ✅ Option B: user id comes from Stripe session client_reference_id
+        const userId = session.client_reference_id ?? null;
+
         if (!orgId) {
           console.warn("[stripe-webhook] RC_ORG_ID missing; skipping DB write", {
             session: session.id,
@@ -125,7 +128,6 @@ export async function POST(req: Request) {
         const total = toCents(session.amount_total);
 
         // Shipping charged (best-effort)
-        // Some Stripe setups don’t expose a clean number here; you can also store this from your own checkout calc.
         const shippingCharged = 0;
 
         // Determine Stripe fee (via latest_charge -> charge.balance_transaction)
@@ -168,6 +170,10 @@ export async function POST(req: Request) {
           .upsert(
             {
               org_id: orgId,
+
+              // ✅ NEW: tie order to signed-in user (enables RLS dashboard)
+              user_id: userId,
+
               customer_id: customerId,
               customer_email: email,
               customer_name: name,
@@ -210,7 +216,7 @@ export async function POST(req: Request) {
             return {
               org_id: orgId,
               order_id: orderId,
-              product_id: null, // map later if you want product linking by SKU
+              product_id: null,
               name:
                 (typeof product !== "string" && product?.name) ||
                 li.description ||
@@ -221,7 +227,7 @@ export async function POST(req: Request) {
                 null,
               quantity: li.quantity ?? 1,
               unit_price_cents: li.price?.unit_amount ?? 0,
-              unit_cost_cents: 0, // admin can edit later; or auto-fill from products.default_unit_cost_cents
+              unit_cost_cents: 0,
               packaging_cost_cents: 0,
             };
           });
@@ -235,12 +241,10 @@ export async function POST(req: Request) {
           }
         }
 
-        // Upsert payment row (fee may be 0 if Stripe fee unavailable)
+        // Upsert payment row
         if (total > 0) {
           const net = Math.max(0, total - feeCents);
 
-          // NOTE: if chargeId is null, this becomes just a plain insert without a stable conflict target.
-          // That’s okay for now; once you confirm latest_charge exists for your flow, it’ll be stable.
           if (chargeId) {
             await supabaseAdmin.from("payments").upsert(
               {
@@ -277,6 +281,7 @@ export async function POST(req: Request) {
           orgId,
           orderId,
           sessionId: session.id,
+          userId,
           total,
           feeCents,
           chargeId,
@@ -322,7 +327,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true });
   } catch (err: any) {
     console.error("[stripe-webhook] handler failed:", err?.message || err);
-    // ACK anyway to avoid retry storms; you can replay events from Stripe if needed
     return NextResponse.json({ received: true });
   }
 }

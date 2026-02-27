@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { mustGetEnv } from "@/lib/env";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/auth-helpers-nextjs";
 
 const stripe = new Stripe(mustGetEnv("STRIPE_SECRET_KEY"));
 
@@ -24,8 +26,6 @@ function normalizeSlug(slug: string) {
 function priceIdForSlug(slug: string) {
   const s = normalizeSlug(slug);
 
-  // Canonical slugs from your products.ts: phyto-16oz / phyto-32oz / phyto-64oz
-  // Accept a few safe variants.
   const is16 =
     s === "phyto-16oz" || s === "phyto16oz" || s === "phyto-16" || s === "16oz" || s === "16";
   const is32 =
@@ -60,6 +60,40 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing 'slug' in request body." }, { status: 400 });
     }
 
+    // ✅ Get the signed-in user from Supabase cookies (compatible with your auth-helpers version)
+    const cookieStore = await cookies();
+
+    const supabase = createServerClient(
+      mustGetEnv("NEXT_PUBLIC_SUPABASE_URL"),
+      mustGetEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+          // In a route handler we don’t need to set/remove cookies for this read-only auth check
+          set() {},
+          remove() {},
+        },
+      }
+    );
+
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr) {
+      return NextResponse.json({ error: "Auth error. Please sign in again." }, { status: 401 });
+    }
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "You must be signed in to checkout." },
+        { status: 401 }
+      );
+    }
+
     const price = priceIdForSlug(slug);
     const origin = originFromReq(req);
 
@@ -69,6 +103,7 @@ export async function POST(req: Request) {
       allow_promotion_codes: true,
       success_url: `${origin}/store?success=1`,
       cancel_url: `${origin}/store?canceled=1`,
+      client_reference_id: user.id, // ✅ Option B: store userId on the Stripe session
       metadata: { slug: normalizeSlug(slug) },
     });
 

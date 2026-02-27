@@ -1,4 +1,5 @@
-import { supabaseServer } from "@/lib/supabase/server";
+// lib/auth/isAdmin.ts
+import { supabaseServer } from "../supabase/server";
 
 /**
  * Checks if the current authenticated user
@@ -24,7 +25,5 @@ export async function isAdmin(): Promise<boolean> {
 
   if (error || !data?.length) return false;
 
-  return data.some(
-    (m) => m.role === "owner" || m.role === "admin"
-  );
+  return data.some((m: any) => m.role === "owner" || m.role === "admin");
 }
