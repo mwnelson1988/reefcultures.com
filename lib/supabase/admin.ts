@@ -1,4 +1,5 @@
 // lib/supabase/admin.ts
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl =
@@ -17,5 +18,6 @@ if (!serviceRoleKey) {
  * Do NOT import in client components.
  */
 export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false },
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  global: { fetch },
 });

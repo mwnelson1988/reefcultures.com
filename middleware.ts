@@ -33,12 +33,43 @@ export async function middleware(req: NextRequest) {
 
   const path = req.nextUrl.pathname;
 
-  // Protect account routes
-  if (path.startsWith("/account") && !session) {
+  // Routes that require a signed-in user
+  const requiresAuth =
+    path.startsWith("/account") || path.startsWith("/dashboard");
+
+  if (requiresAuth && !session) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", path);
     return NextResponse.redirect(url);
+  }
+
+  // Optional: admin-only areas inside dashboard
+  // (Helpers/viewers can still see normal dashboard pages)
+  const requiresAdmin =
+    path.startsWith("/dashboard/team") || path.startsWith("/dashboard/admin");
+
+  if (requiresAdmin && session) {
+    // NOTE: This checks if the user is an owner/admin of ANY org they belong to.
+    // Later, when we add "active org" selection, we’ll scope this to that org_id.
+    const { data: memberships, error } = await supabase
+      .from("organization_members")
+      .select("role")
+      .eq("user_id", session.user.id)
+      .eq("is_active", true);
+
+    // If table doesn’t exist yet or RLS blocks (pre-migration), don’t hard-fail.
+    // Just let them through for now, and once schema is live this starts enforcing.
+    if (!error) {
+      const isAdmin =
+        (memberships ?? []).some((m) => m.role === "owner" || m.role === "admin");
+
+      if (!isAdmin) {
+        const url = req.nextUrl.clone();
+        url.pathname = "/dashboard";
+        return NextResponse.redirect(url);
+      }
+    }
   }
 
   return res;
@@ -46,6 +77,7 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Exclude Next internals + static assets + webhook endpoints
+    "/((?!_next/static|_next/image|favicon.ico|api/stripe-webhook|api/shipstation-webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

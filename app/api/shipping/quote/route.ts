@@ -1,6 +1,6 @@
 // app/api/shipping/quote/route.ts
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 type Item = { sku: string; name: string; qty: number; unit_amount: number };
 
@@ -25,6 +25,7 @@ function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
+// Keeping in case you use it later
 function requireEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing ${name} in environment`);
@@ -344,7 +345,9 @@ export async function POST(req: Request) {
     const quote_key = crypto.randomUUID();
     const expires_at = new Date(Date.now() + 1000 * 60 * 30).toISOString();
 
-    const sb = supabaseAdmin();
+    // ✅ FIX: supabaseAdmin is a client object, not a function
+    const sb = supabaseAdmin;
+
     const { error: upErr } = await sb.from("shipping_quotes").upsert(
       {
         quote_key,
