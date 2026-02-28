@@ -10,14 +10,33 @@ type CookieToSet = {
 };
 
 export async function POST(req: Request) {
-  const { email, password } = (await req.json()) as {
+  const body = (await req.json().catch(() => ({}))) as {
+    firstName?: string;
+    lastName?: string;
+    company?: string | null;
     email?: string;
     password?: string;
   };
 
+  const firstName = (body.firstName ?? "").trim();
+  const lastName = (body.lastName ?? "").trim();
+  const companyRaw = body.company ?? "";
+  const company = (typeof companyRaw === "string" ? companyRaw : "").trim();
+
+  const email = (body.email ?? "").trim();
+  const password = body.password ?? "";
+
   if (!email || !password) {
     return NextResponse.json(
       { error: "Missing email or password" },
+      { status: 400 }
+    );
+  }
+
+  // Optional: enforce names if you want them required (matches your UI)
+  if (!firstName || !lastName) {
+    return NextResponse.json(
+      { error: "Missing first name or last name" },
       { status: 400 }
     );
   }
@@ -46,7 +65,19 @@ export async function POST(req: Request) {
     }
   );
 
-  const { error } = await supabase.auth.signUp({ email, password });
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        first_name: firstName,
+        last_name: lastName,
+        // store only if provided
+        ...(company ? { company } : {}),
+      },
+    },
+  });
+
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   return NextResponse.json({ ok: true });
