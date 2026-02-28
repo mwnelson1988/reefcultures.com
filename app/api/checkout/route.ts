@@ -27,15 +27,39 @@ function priceIdForSlug(slug: string) {
   const s = normalizeSlug(slug);
 
   const is16 =
-    s === "phyto-16oz" || s === "phyto16oz" || s === "phyto-16" || s === "16oz" || s === "16";
+    s === "phyto-16oz" ||
+    s === "phyto16oz" ||
+    s === "phyto-16" ||
+    s === "16oz" ||
+    s === "16";
   const is32 =
-    s === "phyto-32oz" || s === "phyto32oz" || s === "phyto-32" || s === "32oz" || s === "32";
+    s === "phyto-32oz" ||
+    s === "phyto32oz" ||
+    s === "phyto-32" ||
+    s === "32oz" ||
+    s === "32";
   const is64 =
-    s === "phyto-64oz" || s === "phyto64oz" || s === "phyto-64" || s === "64oz" || s === "64";
+    s === "phyto-64oz" ||
+    s === "phyto64oz" ||
+    s === "phyto-64" ||
+    s === "64oz" ||
+    s === "64";
 
-  if (is16) return assertStripePriceId(mustGetEnv("STRIPE_PRICE_PHYTO_16OZ"), "STRIPE_PRICE_PHYTO_16OZ");
-  if (is32) return assertStripePriceId(mustGetEnv("STRIPE_PRICE_PHYTO_32OZ"), "STRIPE_PRICE_PHYTO_32OZ");
-  if (is64) return assertStripePriceId(mustGetEnv("STRIPE_PRICE_PHYTO_64OZ"), "STRIPE_PRICE_PHYTO_64OZ");
+  if (is16)
+    return assertStripePriceId(
+      mustGetEnv("STRIPE_PRICE_PHYTO_16OZ"),
+      "STRIPE_PRICE_PHYTO_16OZ"
+    );
+  if (is32)
+    return assertStripePriceId(
+      mustGetEnv("STRIPE_PRICE_PHYTO_32OZ"),
+      "STRIPE_PRICE_PHYTO_32OZ"
+    );
+  if (is64)
+    return assertStripePriceId(
+      mustGetEnv("STRIPE_PRICE_PHYTO_64OZ"),
+      "STRIPE_PRICE_PHYTO_64OZ"
+    );
 
   throw new Error(`Unknown product slug: ${slug}`);
 }
@@ -57,10 +81,13 @@ export async function POST(req: Request) {
     const slug = body?.slug as string | undefined;
 
     if (!slug) {
-      return NextResponse.json({ error: "Missing 'slug' in request body." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing 'slug' in request body." },
+        { status: 400 }
+      );
     }
 
-    // ✅ Get the signed-in user from Supabase cookies (compatible with your auth-helpers version)
+    // ✅ Get the signed-in user from Supabase cookies
     const cookieStore = await cookies();
 
     const supabase = createServerClient(
@@ -71,7 +98,6 @@ export async function POST(req: Request) {
           get(name: string) {
             return cookieStore.get(name)?.value;
           },
-          // In a route handler we don’t need to set/remove cookies for this read-only auth check
           set() {},
           remove() {},
         },
@@ -84,7 +110,10 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
 
     if (userErr) {
-      return NextResponse.json({ error: "Auth error. Please sign in again." }, { status: 401 });
+      return NextResponse.json(
+        { error: "Auth error. Please sign in again." },
+        { status: 401 }
+      );
     }
 
     if (!user) {
@@ -101,10 +130,26 @@ export async function POST(req: Request) {
       mode: "payment",
       line_items: [{ price, quantity: 1 }],
       allow_promotion_codes: true,
+
+      // Optional but recommended so Stripe collects an email even if your app doesn't pass one
+      customer_email: user.email ?? undefined,
+
+      // Optional: collect shipping address if you ship product
+      shipping_address_collection: {
+        allowed_countries: ["US"],
+      },
+
       success_url: `${origin}/store?success=1`,
       cancel_url: `${origin}/store?canceled=1`,
-      client_reference_id: user.id, // ✅ Option B: store userId on the Stripe session
-      metadata: { slug: normalizeSlug(slug) },
+
+      // ✅ Primary link back to your app user
+      client_reference_id: user.id,
+
+      // ✅ Redundant metadata makes debugging easier
+      metadata: {
+        slug: normalizeSlug(slug),
+        user_id: user.id,
+      },
     });
 
     return NextResponse.json({ url: session.url }, { status: 200 });
