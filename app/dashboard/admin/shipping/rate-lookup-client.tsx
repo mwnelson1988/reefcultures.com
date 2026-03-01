@@ -84,7 +84,7 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   );
 }
 
-// ✅ NEW: client-side validation helpers
+// client-side validation helpers
 function clean(s: string) {
   return (s || "").trim();
 }
@@ -97,7 +97,7 @@ function normalizeState2(s: string) {
 }
 function normalizePostal(s: string, country: string) {
   const p = clean(s);
-  if (isUSCountry(country)) return p.replace(/[^\d]/g, "").slice(0, 5); // keep 5-digit zip
+  if (isUSCountry(country)) return p.replace(/[^\d]/g, "").slice(0, 5);
   return p;
 }
 
@@ -140,7 +140,6 @@ export default function RateLookupClient() {
     }));
   }
 
-  // ✅ NEW: validate before hitting ShipEngine so we never show "'address_line1' should not be empty."
   function validateForm(): string | null {
     const country = clean(form.country).toUpperCase() || "US";
     const address1 = clean(form.address1);
@@ -171,16 +170,16 @@ export default function RateLookupClient() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setPrintError(null);
     setRates([]);
-    setLoading(true);
 
-    // ✅ NEW: hard stop on invalid/empty fields (prevents ShipEngine message leak)
     const validationError = validateForm();
     if (validationError) {
       setError(validationError);
-      setLoading(false);
       return;
     }
+
+    setLoading(true);
 
     try {
       const country = clean(form.country).toUpperCase() || "US";
@@ -225,7 +224,6 @@ export default function RateLookupClient() {
     }
   }
 
-  // create label + open PDF
   async function printLabel(rateId: string) {
     setPrintError(null);
     setPrintingRateId(rateId);
@@ -260,16 +258,22 @@ export default function RateLookupClient() {
           <div className="mt-4 grid gap-4">
             <Field label="Name">
               <Input
+                name="name"
+                autoComplete="name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onBlur={(e) => setForm((s) => ({ ...s, name: clean(e.target.value) }))}
                 placeholder="Store / Customer"
               />
             </Field>
 
             <Field label="Address line 1">
               <Input
+                name="address-line1"
+                autoComplete="address-line1"
                 value={form.address1}
                 onChange={(e) => setForm({ ...form, address1: e.target.value })}
+                onBlur={(e) => setForm((s) => ({ ...s, address1: clean(e.target.value) }))}
                 placeholder="1488 Page Industrial Blvd"
                 required
               />
@@ -277,16 +281,22 @@ export default function RateLookupClient() {
 
             <Field label="Address line 2">
               <Input
+                name="address-line2"
+                autoComplete="address-line2"
                 value={form.address2}
                 onChange={(e) => setForm({ ...form, address2: e.target.value })}
+                onBlur={(e) => setForm((s) => ({ ...s, address2: clean(e.target.value) }))}
               />
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="City">
                 <Input
+                  name="address-level2"
+                  autoComplete="address-level2"
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  onBlur={(e) => setForm((s) => ({ ...s, city: clean(e.target.value) }))}
                   placeholder="St. Louis"
                   required
                 />
@@ -294,9 +304,12 @@ export default function RateLookupClient() {
 
               <Field label="State">
                 <Input
+                  name="address-level1"
+                  autoComplete="address-level1"
                   value={form.state}
-                  onChange={(e) =>
-                    setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })
+                  onChange={(e) => setForm({ ...form, state: e.target.value })}
+                  onBlur={(e) =>
+                    setForm((s) => ({ ...s, state: normalizeState2(e.target.value) }))
                   }
                   placeholder="MO"
                   required
@@ -307,8 +320,14 @@ export default function RateLookupClient() {
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Postal code">
                 <Input
+                  name="postal-code"
+                  autoComplete="postal-code"
                   value={form.postal}
                   onChange={(e) => setForm({ ...form, postal: e.target.value })}
+                  onBlur={(e) => {
+                    const country = clean(form.country).toUpperCase() || "US";
+                    setForm((s) => ({ ...s, postal: normalizePostal(e.target.value, country) }));
+                  }}
                   placeholder="63132"
                   required
                 />
@@ -316,9 +335,12 @@ export default function RateLookupClient() {
 
               <Field label="Country">
                 <Input
+                  name="country"
+                  autoComplete="country"
                   value={form.country}
-                  onChange={(e) =>
-                    setForm({ ...form, country: e.target.value.toUpperCase().slice(0, 2) })
+                  onChange={(e) => setForm({ ...form, country: e.target.value })}
+                  onBlur={(e) =>
+                    setForm((s) => ({ ...s, country: clean(e.target.value).toUpperCase().slice(0, 2) }))
                   }
                   placeholder="US"
                   required
