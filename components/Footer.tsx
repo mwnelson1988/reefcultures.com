@@ -1,6 +1,14 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function Footer() {
+  const pathname = usePathname();
+
+  // ✅ Dashboards have their own chrome; hide the marketing footer.
+  if (pathname?.startsWith("/dashboard")) return null;
+
   return (
     <footer className="border-t border-hair bg-bg">
       <div className="rc-container py-14 flex flex-col gap-10 md:flex-row md:items-center md:justify-between">

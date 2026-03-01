@@ -16,5 +16,5 @@ export default async function DashboardPage() {
 
   if (await isAdmin()) redirect("/dashboard/admin");
 
-  redirect("/dashboard/user");
+  redirect("/dashboard/overview");
 }

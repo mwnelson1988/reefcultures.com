@@ -1,6 +1,6 @@
 // app/api/shipping/quote/route.ts
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { supabaseAdminClient } from "@/lib/supabase/admin";
 
 type Item = { sku: string; name: string; qty: number; unit_amount: number };
 
@@ -203,6 +203,7 @@ function dedupeAndCap(rates: any[]) {
 }
 
 export async function POST(req: Request) {
+  const sb = supabaseAdminClient();
   try {
     // Accept either variable name.
     // Many folks paste their ShipEngine key into SHIPSTATION_API_KEY by mistake.
@@ -345,8 +346,7 @@ export async function POST(req: Request) {
     const quote_key = crypto.randomUUID();
     const expires_at = new Date(Date.now() + 1000 * 60 * 30).toISOString();
 
-    // ✅ FIX: supabaseAdmin is a client object, not a function
-    const sb = supabaseAdmin;
+    // ✅ FIX: sb is a client object, not a function
 
     const { error: upErr } = await sb.from("shipping_quotes").upsert(
       {

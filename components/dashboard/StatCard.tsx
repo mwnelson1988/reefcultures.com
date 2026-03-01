@@ -1,20 +1,23 @@
 // components/dashboard/StatCard.tsx
+
 export default function StatCard({
-  title,
+  label,
   value,
-  subtext,
+  hint,
 }: {
-  title: string;
+  label: string;
   value: string;
-  subtext?: string;
+  hint?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
-      <div className="text-xs font-semibold text-[rgb(var(--ink-700))]">{title}</div>
-      <div className="mt-2 text-xl font-extrabold tracking-tight">{value}</div>
-      {subtext ? (
-        <div className="mt-1 text-sm text-[rgb(var(--ink-700))]">{subtext}</div>
-      ) : null}
+    <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-4 shadow-sm backdrop-blur">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/60">
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-extrabold tracking-tight text-white">
+        {value}
+      </div>
+      {hint ? <div className="mt-1 text-xs text-white/60">{hint}</div> : null}
     </div>
   );
 }

@@ -1,29 +1,47 @@
 // lib/auth/isAdmin.ts
-import { supabaseServer } from "../supabase/server";
+import { mustGetOrgId } from "@/lib/org";
+import { supabaseServer } from "@/lib/supabase/server";
+
+export type OrgMembership = {
+  org_id: string;
+  user_id: string;
+  role: string | null;
+  is_active: boolean | null;
+};
 
 /**
- * Checks if the current authenticated user
- * is owner or admin in ANY organization.
- *
- * Later we can scope this to a specific org_id
- * once we add "active org" selection.
+ * Fetch the current user's membership row for the active org.
+ * Table expected: organization_members (org_id, user_id, role, is_active)
  */
-export async function isAdmin(): Promise<boolean> {
+export async function getActiveOrgMembership(): Promise<OrgMembership | null> {
   const supabase = await supabaseServer();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) return null;
 
-  if (!user) return false;
+  const orgId = mustGetOrgId();
 
   const { data, error } = await supabase
     .from("organization_members")
-    .select("role")
+    .select("org_id,user_id,role,is_active")
+    .eq("org_id", orgId)
     .eq("user_id", user.id)
-    .eq("is_active", true);
+    .maybeSingle();
 
-  if (error || !data?.length) return false;
+  if (error || !data) return null;
+  return data as any;
+}
 
-  return data.some((m: any) => m.role === "owner" || m.role === "admin");
+/**
+ * Role-based admin check scoped to the active org.
+ * Admin roles: owner, admin
+ */
+export async function isAdmin(): Promise<boolean> {
+  const m = await getActiveOrgMembership();
+  if (!m) return false;
+  if (m.is_active === false) return false;
+  const role = String(m.role || "").toLowerCase();
+  return role === "owner" || role === "admin";
 }

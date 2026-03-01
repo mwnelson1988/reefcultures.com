@@ -1,6 +1,6 @@
 // lib/dashboard/live.ts
 import { stripe } from "@/lib/stripe";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { supabaseAdminClient } from "@/lib/supabase/admin";
 
 export type DashboardSubscription = {
   statusLabel: string;
@@ -91,8 +91,9 @@ function makeRcLabel(sessionId: string) {
 }
 
 export async function getLiveDashboardData(userId: string): Promise<DashboardData> {
+  const sb = supabaseAdminClient();
   // 1) Profile (stripe_customer_id)
-  const { data: profile } = await (supabaseAdmin as any)
+  const { data: profile } = await (supabaseAdminClient() as any)
     .from("profiles")
     .select("stripe_customer_id,email")
     .eq("id", userId)
@@ -102,7 +103,7 @@ export async function getLiveDashboardData(userId: string): Promise<DashboardDat
     typeof profile?.stripe_customer_id === "string" ? profile.stripe_customer_id : null;
 
   // 2) Subscription
-  const { data: subRow } = await (supabaseAdmin as any)
+  const { data: subRow } = await (supabaseAdminClient() as any)
     .from("subscriptions")
     .select("stripe_price_id,status,current_period_end,cancel_at_period_end,updated_at")
     .eq("user_id", userId)

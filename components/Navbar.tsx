@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import AuthNav from "@/components/AuthNav";
 
 const navLinks = [
@@ -14,6 +15,10 @@ const navLinks = [
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const pathname = usePathname();
+
+  // ✅ Dashboards have their own chrome; hide the marketing navbar.
+  if (pathname?.startsWith("/dashboard")) return null;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);

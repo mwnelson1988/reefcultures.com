@@ -75,10 +75,108 @@ function originFromReq(req: Request) {
   return "http://localhost:3000";
 }
 
+async function getSignedInUser() {
+  const cookieStore = await cookies();
+
+  const supabase = createServerClient(
+    mustGetEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustGetEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        // Route handlers shouldn't mutate auth cookies.
+        set() {},
+        remove() {},
+      },
+    }
+  );
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  return { user, error };
+}
+
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const slug = url.searchParams.get("slug") || "";
+    const guest = url.searchParams.get("guest") === "1";
+
+    if (!slug) {
+      return NextResponse.redirect(
+        new URL("/store?error=missing_slug", originFromReq(req)),
+        303
+      );
+    }
+
+    const origin = originFromReq(req);
+    const price = priceIdForSlug(slug);
+
+    // Signed-in checkout (default)
+    let userId: string | undefined;
+    let email: string | undefined;
+
+    if (!guest) {
+      const { user, error } = await getSignedInUser();
+      if (error) {
+        return NextResponse.redirect(new URL("/login", origin), 303);
+      }
+      if (!user) {
+        const next = `/api/checkout?slug=${encodeURIComponent(slug)}`;
+        return NextResponse.redirect(
+          new URL(`/login?next=${encodeURIComponent(next)}`, origin),
+          303
+        );
+      }
+      userId = user.id;
+      email = user.email ?? undefined;
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [{ price, quantity: 1 }],
+      allow_promotion_codes: true,
+
+      customer_email: email,
+
+      shipping_address_collection: {
+        allowed_countries: ["US"],
+      },
+
+      success_url: `${origin}/store?success=1`,
+      cancel_url: `${origin}/store?canceled=1`,
+
+      client_reference_id: userId,
+
+      metadata: {
+        slug: normalizeSlug(slug),
+        user_id: userId ?? "guest",
+        guest: guest ? "1" : "0",
+      },
+    });
+
+    return NextResponse.redirect(session.url!, 303);
+  } catch (err: any) {
+    const origin = originFromReq(req);
+    const message =
+      err?.raw?.message || err?.message || "Checkout error (unknown).";
+    return NextResponse.redirect(
+      new URL(`/store?error=${encodeURIComponent(message)}`, origin),
+      303
+    );
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null);
     const slug = body?.slug as string | undefined;
+    const guest = Boolean(body?.guest);
 
     if (!slug) {
       return NextResponse.json(
@@ -87,40 +185,26 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ Get the signed-in user from Supabase cookies
-    const cookieStore = await cookies();
+    let user: { id: string; email?: string | null } | null = null;
 
-    const supabase = createServerClient(
-      mustGetEnv("NEXT_PUBLIC_SUPABASE_URL"),
-      mustGetEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          set() {},
-          remove() {},
-        },
+    if (!guest) {
+      const { user: signedIn, error: userErr } = await getSignedInUser();
+
+      if (userErr) {
+        return NextResponse.json(
+          { error: "Auth error. Please sign in again." },
+          { status: 401 }
+        );
       }
-    );
 
-    const {
-      data: { user },
-      error: userErr,
-    } = await supabase.auth.getUser();
+      if (!signedIn) {
+        return NextResponse.json(
+          { error: "You must be signed in to checkout." },
+          { status: 401 }
+        );
+      }
 
-    if (userErr) {
-      return NextResponse.json(
-        { error: "Auth error. Please sign in again." },
-        { status: 401 }
-      );
-    }
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "You must be signed in to checkout." },
-        { status: 401 }
-      );
+      user = signedIn as any;
     }
 
     const price = priceIdForSlug(slug);
@@ -132,7 +216,7 @@ export async function POST(req: Request) {
       allow_promotion_codes: true,
 
       // Optional but recommended so Stripe collects an email even if your app doesn't pass one
-      customer_email: user.email ?? undefined,
+      customer_email: user?.email ?? undefined,
 
       // Optional: collect shipping address if you ship product
       shipping_address_collection: {
@@ -143,12 +227,13 @@ export async function POST(req: Request) {
       cancel_url: `${origin}/store?canceled=1`,
 
       // ✅ Primary link back to your app user
-      client_reference_id: user.id,
+      client_reference_id: user?.id,
 
       // ✅ Redundant metadata makes debugging easier
       metadata: {
         slug: normalizeSlug(slug),
-        user_id: user.id,
+        user_id: user?.id ?? "guest",
+        guest: guest ? "1" : "0",
       },
     });
 

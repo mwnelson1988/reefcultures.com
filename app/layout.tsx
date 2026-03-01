@@ -1,8 +1,7 @@
 import "./globals.css";
 
 import type { Metadata } from "next";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import AppChrome from "@/components/AppChrome";
 
 export const metadata: Metadata = {
   title: "ReefCultures",
@@ -15,9 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-bg text-ink min-h-screen">
         {/* Background treatment */}
         <div className="min-h-screen bg-ocean-radial">
-          <Navbar />
-          {children}
-          <Footer />
+          <AppChrome>{children}</AppChrome>
         </div>
       </body>
     </html>

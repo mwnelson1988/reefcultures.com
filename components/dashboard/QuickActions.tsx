@@ -52,12 +52,12 @@ export default function QuickActions() {
   ];
 
   return (
-    <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-5 shadow-sm backdrop-blur">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold tracking-tight">Quick actions</h3>
-        <span className="text-xs text-[rgb(var(--ink-700))]">Fast</span>
+        <h3 className="text-sm font-bold tracking-tight text-white">Quick actions</h3>
+        <span className="text-xs text-white/60">Fast</span>
       </div>
-      <p className="mt-1 text-sm text-[rgb(var(--ink-700))]">
+      <p className="mt-1 text-sm text-white/70">
         The essentials—clean and simple.
       </p>
 
@@ -68,9 +68,9 @@ export default function QuickActions() {
             "focus:outline-none focus:ring-2 focus:ring-black/10";
 
           const primary =
-            "border-black/10 bg-[rgb(var(--ocean-950))] text-white hover:opacity-95";
+            "border-white/15 bg-bg text-white hover:opacity-95";
           const secondary =
-            "border-black/10 bg-white hover:bg-black/[0.02]";
+            "border-white/15 bg-white/5 hover:bg-white/10";
 
           const cls =
             base +
@@ -86,7 +86,7 @@ export default function QuickActions() {
                   "text-xs font-semibold " +
                   (a.variant === "primary"
                     ? "text-white/80"
-                    : "text-[rgb(var(--ink-700))]")
+                  : "text-white/70")
                 }
               >
                 →
@@ -100,7 +100,7 @@ export default function QuickActions() {
                 "mt-1 text-xs " +
                 (a.variant === "primary"
                   ? "text-white/80"
-                  : "text-[rgb(var(--ink-700))]")
+                  : "text-white/70")
               }
             >
               {a.desc}
@@ -131,8 +131,8 @@ export default function QuickActions() {
         })}
       </div>
 
-      <div className="mt-4 border-t border-black/10 pt-3">
-        <p className="text-xs text-[rgb(var(--ink-700))]">
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <p className="text-xs text-white/70">
           Tip: Use <span className="font-semibold">Manage Subscription</span> to
           update payment methods, address, or cancel anytime.
         </p>

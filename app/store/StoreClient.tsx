@@ -1,16 +1,18 @@
 // app/store/StoreClient.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { products } from "@/lib/products";
 import { Reveal } from "@/components/ui/Reveal";
 
 type CheckoutMode = "guest" | "account";
 
 async function startCheckout(slug: string, mode: CheckoutMode) {
+  // Guest checkout remains POST-based so we can explicitly signal guest=true.
+  // Signed-in checkout uses a GET redirect to avoid any modal flicker.
   const res = await fetch("/api/checkout", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -79,12 +81,10 @@ function CheckoutChoiceModal({
           Checkout
         </div>
 
-        <div className="mt-2 text-xl font-semibold text-white">
-          {title}
-        </div>
+        <div className="mt-2 text-xl font-semibold text-white">{title}</div>
 
         <div className="mt-2 text-sm text-white/70 leading-relaxed">
-          Choose how you'd like to checkout.
+          Choose how you&apos;d like to checkout.
         </div>
 
         {error && (
@@ -128,58 +128,66 @@ function CheckoutChoiceModal({
   );
 }
 
-export default function StoreClient() {
+export default function StoreClient({ isSignedIn }: { isSignedIn: boolean }) {
   const router = useRouter();
-  const sp = useSearchParams();
 
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
 
-  useEffect(() => {
-    const buy = sp?.get("buy");
-    if (buy) {
-      setActiveSlug(buy);
-      setChoiceOpen(true);
-      setModalError(null);
-      setModalLoading(false);
-    }
-  }, [sp]);
+  // Button-level guard for guest checkout; signed-in path uses native navigation.
+  const [buyingSlug, setBuyingSlug] = useState<string | null>(null);
+  const buyingRef = useRef(false);
 
-  function openChoice(slug: string) {
+  const checkoutHref = useMemo(() => {
+    return (slug: string) => `/api/checkout?slug=${encodeURIComponent(slug)}`;
+  }, []);
+
+  function beginPurchase(slug: string) {
     setActiveSlug(slug);
-    setChoiceOpen(true);
     setModalError(null);
-    setModalLoading(false);
+
+    // ✅ Signed-in users never see the modal. Native navigation => no flicker.
+    if (isSignedIn) {
+      window.location.href = checkoutHref(slug);
+      return;
+    }
+
+    // Not signed in → show modal choices
+    setChoiceOpen(true);
   }
 
   async function onGuest() {
     if (!activeSlug) return;
+    if (buyingRef.current) return;
+    buyingRef.current = true;
 
     setModalLoading(true);
     setModalError(null);
+    setBuyingSlug(activeSlug);
 
     const result = await startCheckout(activeSlug, "guest");
 
     if (!result.ok) {
       setModalError(result.error);
       setModalLoading(false);
+      setBuyingSlug(null);
+      buyingRef.current = false;
       return;
     }
+    // redirect happens in startCheckout
   }
 
   function onAccount() {
     if (!activeSlug) return;
-
-    const redirectTo = `/store?buy=${encodeURIComponent(activeSlug)}`;
-    router.push(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
+    const next = checkoutHref(activeSlug);
+    router.push(`/login?next=${encodeURIComponent(next)}`);
   }
 
   const activeTitle =
     activeSlug &&
-    (products.find((p) => p.slug === activeSlug)?.name ||
-      "Live Phytoplankton");
+    (products.find((p) => p.slug === activeSlug)?.name || "Live Phytoplankton");
 
   return (
     <main className="pt-20">
@@ -188,7 +196,13 @@ export default function StoreClient() {
         title={activeTitle ? `Buy ${activeTitle}` : "Buy"}
         error={modalError}
         loading={modalLoading}
-        onClose={() => setChoiceOpen(false)}
+        onClose={() => {
+          setChoiceOpen(false);
+          setModalError(null);
+          setModalLoading(false);
+          setBuyingSlug(null);
+          buyingRef.current = false;
+        }}
         onGuest={onGuest}
         onAccount={onAccount}
       />
@@ -211,7 +225,6 @@ export default function StoreClient() {
               <Reveal key={p.slug} delay={0.06 + idx * 0.05}>
                 <div className="rc-box p-7">
                   <div className="flex flex-col h-full">
-
                     {/* Header */}
                     <div className="grid grid-cols-[1fr_140px] gap-8 items-start">
                       <div>
@@ -266,12 +279,22 @@ export default function StoreClient() {
 
                     {/* Actions */}
                     <div className="mt-auto pt-7 flex items-center gap-4">
-                      <button
-                        onClick={() => openChoice(p.slug)}
-                        className="px-6 py-3 bg-ink text-bg text-[12px] font-semibold uppercase tracking-[0.20em] hover:bg-[rgba(29,211,197,0.95)] transition"
-                      >
-                        Buy
-                      </button>
+                      {isSignedIn ? (
+                        <a
+                          href={checkoutHref(p.slug)}
+                          className="px-6 py-3 bg-ink text-bg text-[12px] font-semibold uppercase tracking-[0.20em] hover:bg-[rgba(29,211,197,0.95)] transition"
+                        >
+                          Buy
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => beginPurchase(p.slug)}
+                          disabled={buyingSlug === p.slug}
+                          className="px-6 py-3 bg-ink text-bg text-[12px] font-semibold uppercase tracking-[0.20em] hover:bg-[rgba(29,211,197,0.95)] transition disabled:opacity-60"
+                        >
+                          {buyingSlug === p.slug ? "Redirecting…" : "Buy"}
+                        </button>
+                      )}
 
                       <Link
                         href={`/store/${p.slug}`}
@@ -280,7 +303,6 @@ export default function StoreClient() {
                         Details
                       </Link>
                     </div>
-
                   </div>
                 </div>
               </Reveal>

@@ -9,7 +9,10 @@ export default async function SignInPage({
   searchParams?: Promise<{ next?: string }>;
 }) {
   const sp = (await searchParams) ?? {};
-  const next = sp.next ?? "/dashboard";
+
+  // ✅ Do not default to /account anymore.
+  // Leave blank unless a next param is explicitly provided; API will choose.
+  const next = sp.next ?? "";
 
   return (
     <div>

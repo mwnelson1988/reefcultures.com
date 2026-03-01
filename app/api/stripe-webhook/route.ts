@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { supabaseAdminClient } from "@/lib/supabase/admin";
 
 function getOrgId() {
   const orgId = process.env.RC_ORG_ID;
@@ -23,6 +23,7 @@ function mapOrderStatusFromSession(session: Stripe.Checkout.Session) {
 }
 
 export async function POST(req: Request) {
+  const sb = supabaseAdminClient();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!webhookSecret) {
@@ -101,7 +102,7 @@ export async function POST(req: Request) {
               ? session.customer
               : session.customer?.id ?? null;
 
-          const { data: upserted, error: upsertErr } = await supabaseAdmin
+          const { data: upserted, error: upsertErr } = await sb
             .from("customers")
             .upsert(
               {
@@ -119,7 +120,7 @@ export async function POST(req: Request) {
             customerId = upserted.id;
           } else {
             // Fallback: attempt lookup
-            const { data: existingCustomer } = await supabaseAdmin
+            const { data: existingCustomer } = await sb
               .from("customers")
               .select("id")
               .eq("org_id", orgId)
@@ -199,7 +200,7 @@ export async function POST(req: Request) {
         // ---------------------------
         const placedAt = new Date().toISOString();
 
-        const { data: orderRow, error: orderErr } = await supabaseAdmin
+        const { data: orderRow, error: orderErr } = await sb
           .from("orders")
           .upsert(
             {
@@ -245,7 +246,7 @@ export async function POST(req: Request) {
         // ---------------------------
         // Replace line items (idempotent)
         // ---------------------------
-        const delRes = await supabaseAdmin
+        const delRes = await sb
           .from("order_items")
           .delete()
           .eq("order_id", orderId);
@@ -284,7 +285,7 @@ export async function POST(req: Request) {
             };
           });
 
-          const { error: itemsErr } = await supabaseAdmin
+          const { error: itemsErr } = await sb
             .from("order_items")
             .insert(itemsToInsert);
 
@@ -301,7 +302,7 @@ export async function POST(req: Request) {
           const net = Math.max(0, total - feeCents);
 
           if (chargeId) {
-            const { error: payErr } = await supabaseAdmin.from("payments").upsert(
+            const { error: payErr } = await sb.from("payments").upsert(
               {
                 org_id: orgId,
                 order_id: orderId,
@@ -322,7 +323,7 @@ export async function POST(req: Request) {
               return NextResponse.json({ error: "payments_upsert_failed" }, { status: 500 });
             }
           } else {
-            const { error: payInsErr } = await supabaseAdmin.from("payments").insert({
+            const { error: payInsErr } = await sb.from("payments").insert({
               org_id: orgId,
               order_id: orderId,
               status: status === "paid" ? "succeeded" : status,
@@ -365,7 +366,7 @@ export async function POST(req: Request) {
           typeof refund.charge === "string" ? refund.charge : null;
         if (!chargeId) break;
 
-        const { data: payment } = await supabaseAdmin
+        const { data: payment } = await sb
           .from("payments")
           .select("order_id")
           .eq("org_id", orgId)
@@ -374,7 +375,7 @@ export async function POST(req: Request) {
 
         if (!payment?.order_id) break;
 
-        const { error: refundErr } = await supabaseAdmin.from("refunds").upsert(
+        const { error: refundErr } = await sb.from("refunds").upsert(
           {
             org_id: orgId,
             order_id: payment.order_id,
