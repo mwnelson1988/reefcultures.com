@@ -84,6 +84,23 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   );
 }
 
+// ✅ NEW: client-side validation helpers
+function clean(s: string) {
+  return (s || "").trim();
+}
+function isUSCountry(code: string) {
+  const c = clean(code).toUpperCase();
+  return c === "US" || c === "USA";
+}
+function normalizeState2(s: string) {
+  return clean(s).toUpperCase().slice(0, 2);
+}
+function normalizePostal(s: string, country: string) {
+  const p = clean(s);
+  if (isUSCountry(country)) return p.replace(/[^\d]/g, "").slice(0, 5); // keep 5-digit zip
+  return p;
+}
+
 export default function RateLookupClient() {
   const [form, setForm] = useState<FormState>({
     name: "",
@@ -104,7 +121,7 @@ export default function RateLookupClient() {
   const [error, setError] = useState<string | null>(null);
   const [rates, setRates] = useState<Rate[]>([]);
 
-  // NEW: label creation state
+  // label creation state
   const [printingRateId, setPrintingRateId] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
 
@@ -123,22 +140,62 @@ export default function RateLookupClient() {
     }));
   }
 
+  // ✅ NEW: validate before hitting ShipEngine so we never show "'address_line1' should not be empty."
+  function validateForm(): string | null {
+    const country = clean(form.country).toUpperCase() || "US";
+    const address1 = clean(form.address1);
+    const city = clean(form.city);
+    const postal = normalizePostal(form.postal, country);
+    const state = normalizeState2(form.state);
+
+    if (!address1) return "Address line 1 is required.";
+    if (!city) return "City is required.";
+    if (!postal) return "Postal code is required.";
+
+    if (isUSCountry(country)) {
+      if (state.length !== 2) return "State must be a 2-letter code (e.g., MO).";
+      if (postal.length !== 5) return "ZIP must be 5 digits.";
+    }
+
+    const w = Number(form.weightOz);
+    const l = Number(form.lengthIn);
+    const wi = Number(form.widthIn);
+    const h = Number(form.heightIn);
+    if (!Number.isFinite(w) || w <= 0) return "Weight must be a number greater than 0.";
+    if (![l, wi, h].every((n) => Number.isFinite(n) && n > 0))
+      return "Dimensions must be numbers greater than 0.";
+
+    return null;
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setRates([]);
     setLoading(true);
 
+    // ✅ NEW: hard stop on invalid/empty fields (prevents ShipEngine message leak)
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      setLoading(false);
+      return;
+    }
+
     try {
+      const country = clean(form.country).toUpperCase() || "US";
+      const postal = normalizePostal(form.postal, country);
+      const state = normalizeState2(form.state);
+
       const body = {
         to: {
-          name: form.name || "Store",
-          address_line1: form.address1,
-          address_line2: form.address2 || undefined,
-          city_locality: form.city,
-          state_province: form.state,
-          postal_code: form.postal,
-          country_code: form.country,
+          name: clean(form.name) || "Store",
+          address_line1: clean(form.address1),
+          address_line2: clean(form.address2) || undefined,
+          city_locality: clean(form.city),
+          state_province: state,
+          postal_code: postal,
+          country_code: country,
         },
         pkg: {
           weight_oz: Number(form.weightOz),
@@ -168,7 +225,7 @@ export default function RateLookupClient() {
     }
   }
 
-  // NEW: create label + open PDF
+  // create label + open PDF
   async function printLabel(rateId: string) {
     setPrintError(null);
     setPrintingRateId(rateId);
@@ -186,7 +243,6 @@ export default function RateLookupClient() {
       const url = data?.label_url as string | undefined;
       if (!url) throw new Error("Label created but no label_url was returned");
 
-      // Open PDF in a new tab; user can print from the PDF viewer
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (e: any) {
       setPrintError(e?.message || "Failed to create label");
@@ -214,6 +270,7 @@ export default function RateLookupClient() {
               <Input
                 value={form.address1}
                 onChange={(e) => setForm({ ...form, address1: e.target.value })}
+                placeholder="1488 Page Industrial Blvd"
                 required
               />
             </Field>
@@ -230,6 +287,7 @@ export default function RateLookupClient() {
                 <Input
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  placeholder="St. Louis"
                   required
                 />
               </Field>
@@ -237,7 +295,10 @@ export default function RateLookupClient() {
               <Field label="State">
                 <Input
                   value={form.state}
-                  onChange={(e) => setForm({ ...form, state: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })
+                  }
+                  placeholder="MO"
                   required
                 />
               </Field>
@@ -248,6 +309,7 @@ export default function RateLookupClient() {
                 <Input
                   value={form.postal}
                   onChange={(e) => setForm({ ...form, postal: e.target.value })}
+                  placeholder="63132"
                   required
                 />
               </Field>
@@ -256,8 +318,9 @@ export default function RateLookupClient() {
                 <Input
                   value={form.country}
                   onChange={(e) =>
-                    setForm({ ...form, country: e.target.value.toUpperCase() })
+                    setForm({ ...form, country: e.target.value.toUpperCase().slice(0, 2) })
                   }
+                  placeholder="US"
                   required
                 />
               </Field>
@@ -356,12 +419,9 @@ export default function RateLookupClient() {
                 USPS Priority / Express and UPS fast services are shown.
               </div>
             </div>
-            <div className="text-xs text-white/60">
-              {rates.length ? `${rates.length} options` : ""}
-            </div>
+            <div className="text-xs text-white/60">{rates.length ? `${rates.length} options` : ""}</div>
           </div>
 
-          {/* NEW: show label errors here */}
           {printError ? (
             <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
               {printError}
@@ -392,9 +452,7 @@ export default function RateLookupClient() {
                         <div className="font-semibold text-white">
                           {r.carrier_friendly_name || "Carrier"} · {r.service_type}
                         </div>
-                        <div className="mt-1 text-xs text-white/60">
-                          {r.service_code || r.rate_id}
-                        </div>
+                        <div className="mt-1 text-xs text-white/60">{r.service_code || r.rate_id}</div>
                       </td>
 
                       <td className="px-4 py-3 text-white/80">
@@ -412,7 +470,6 @@ export default function RateLookupClient() {
                         )}
                       </td>
 
-                      {/* UPDATED: cost cell now includes Print Label */}
                       <td className="px-4 py-3 text-right">
                         <div className="font-extrabold text-white">
                           {money(Number(r.amount), (r.currency || "usd").toUpperCase())}
@@ -433,8 +490,7 @@ export default function RateLookupClient() {
                 ) : (
                   <tr>
                     <td className="px-4 py-6 text-sm text-white/60" colSpan={3}>
-                      Enter an address and click{" "}
-                      <span className="font-semibold text-white">Get rates</span>.
+                      Enter an address and click <span className="font-semibold text-white">Get rates</span>.
                     </td>
                   </tr>
                 )}
