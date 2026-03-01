@@ -1,3 +1,4 @@
+// app/dashboard/admin/shipping/rate-lookup-client.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -28,7 +29,10 @@ type FormState = {
   heightIn: string;
 };
 
-const DEFAULTS: Record<Exclude<FormState["preset"], "CUSTOM">, { w: number; l: number; wi: number; h: number }> = {
+const DEFAULTS: Record<
+  Exclude<FormState["preset"], "CUSTOM">,
+  { w: number; l: number; wi: number; h: number }
+> = {
   BOX_16OZ: { w: 40, l: 10, wi: 8, h: 6 },
   BOX_32OZ: { w: 64, l: 10, wi: 8, h: 6 },
   BOX_64OZ: { w: 96, l: 12, wi: 10, h: 8 },
@@ -46,7 +50,7 @@ function money(n: number, currency = "USD") {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-ink/60">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/60">
         {label}
       </div>
       <div className="mt-2">{children}</div>
@@ -59,7 +63,8 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={
-        "w-full rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--ocean-500),0.45)] " +
+        "w-full rounded-xl border border-white/10 bg-[#0F1A2E] px-3 py-2 text-sm text-white placeholder:text-white/40 " +
+        "focus:outline-none focus:ring-2 focus:ring-[rgba(var(--ocean-500),0.45)] disabled:opacity-60 " +
         (props.className || "")
       }
     />
@@ -71,7 +76,8 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
     <select
       {...props}
       className={
-        "w-full rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-[rgba(var(--ocean-500),0.45)] " +
+        "w-full rounded-xl border border-white/10 bg-[#0F1A2E] px-3 py-2 text-sm text-white " +
+        "focus:outline-none focus:ring-2 focus:ring-[rgba(var(--ocean-500),0.45)] " +
         (props.className || "")
       }
     />
@@ -161,39 +167,76 @@ export default function RateLookupClient() {
   return (
     <div className="grid gap-8 lg:grid-cols-12">
       <form onSubmit={onSubmit} className="lg:col-span-5 space-y-5">
-        <div className="rounded-2xl border border-ink/10 bg-white p-5">
-          <div className="text-sm font-semibold">Destination</div>
+        <div className="rounded-2xl border border-white/10 bg-[#0F1A2E] p-5">
+          <div className="text-sm font-semibold text-white">Destination</div>
+
           <div className="mt-4 grid gap-4">
             <Field label="Name">
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Store / Customer" />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Store / Customer"
+              />
             </Field>
+
             <Field label="Address line 1">
-              <Input value={form.address1} onChange={(e) => setForm({ ...form, address1: e.target.value })} required />
+              <Input
+                value={form.address1}
+                onChange={(e) => setForm({ ...form, address1: e.target.value })}
+                required
+              />
             </Field>
+
             <Field label="Address line 2">
-              <Input value={form.address2} onChange={(e) => setForm({ ...form, address2: e.target.value })} />
+              <Input
+                value={form.address2}
+                onChange={(e) => setForm({ ...form, address2: e.target.value })}
+              />
             </Field>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="City">
-                <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} required />
+                <Input
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  required
+                />
               </Field>
+
               <Field label="State">
-                <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} required />
+                <Input
+                  value={form.state}
+                  onChange={(e) => setForm({ ...form, state: e.target.value })}
+                  required
+                />
               </Field>
             </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Postal code">
-                <Input value={form.postal} onChange={(e) => setForm({ ...form, postal: e.target.value })} required />
+                <Input
+                  value={form.postal}
+                  onChange={(e) => setForm({ ...form, postal: e.target.value })}
+                  required
+                />
               </Field>
+
               <Field label="Country">
-                <Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value.toUpperCase() })} required />
+                <Input
+                  value={form.country}
+                  onChange={(e) =>
+                    setForm({ ...form, country: e.target.value.toUpperCase() })
+                  }
+                  required
+                />
               </Field>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-ink/10 bg-white p-5">
-          <div className="text-sm font-semibold">Package</div>
+        <div className="rounded-2xl border border-white/10 bg-[#0F1A2E] p-5">
+          <div className="text-sm font-semibold text-white">Package</div>
+
           <div className="mt-4 grid gap-4">
             <Field label="Preset">
               <Select
@@ -234,6 +277,7 @@ export default function RateLookupClient() {
                   disabled={dimsDisabled}
                 />
               </Field>
+
               <Field label="Width (in)">
                 <Input
                   value={form.widthIn}
@@ -243,6 +287,7 @@ export default function RateLookupClient() {
                   disabled={dimsDisabled}
                 />
               </Field>
+
               <Field label="Height (in)">
                 <Input
                   value={form.heightIn}
@@ -256,14 +301,14 @@ export default function RateLookupClient() {
 
             <button
               type="submit"
-              className="mt-2 inline-flex items-center justify-center rounded-xl bg-ink px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.18em] text-white transition hover:opacity-95 disabled:opacity-60"
+              className="mt-2 inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.18em] text-[#0B1220] transition hover:opacity-95 disabled:opacity-60"
               disabled={loading}
             >
               {loading ? "Fetching rates…" : "Get rates"}
             </button>
 
             {error ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
                 {error}
               </div>
             ) : null}
@@ -272,45 +317,53 @@ export default function RateLookupClient() {
       </form>
 
       <div className="lg:col-span-7">
-        <div className="rounded-2xl border border-ink/10 bg-white p-5">
+        <div className="rounded-2xl border border-white/10 bg-[#0F1A2E] p-5">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold">Results</div>
-              <div className="mt-1 text-xs text-ink/60">
+              <div className="text-sm font-semibold text-white">Results</div>
+              <div className="mt-1 text-xs text-white/60">
                 USPS Priority / Express and UPS fast services are shown.
               </div>
             </div>
-            <div className="text-xs text-ink/60">{rates.length ? `${rates.length} options` : ""}</div>
+            <div className="text-xs text-white/60">
+              {rates.length ? `${rates.length} options` : ""}
+            </div>
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-xl border border-ink/10">
+          <div className="mt-5 overflow-hidden rounded-xl border border-white/10">
             <table className="w-full text-sm">
-              <thead className="bg-ink/5">
+              <thead className="bg-white/5">
                 <tr>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink/60">
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-white/60">
                     Service
                   </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink/60">
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-white/60">
                     ETA
                   </th>
-                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-ink/60">
+                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-white/60">
                     Cost
                   </th>
                 </tr>
               </thead>
+
               <tbody>
                 {rates.length ? (
                   rates.map((r) => (
-                    <tr key={r.rate_id} className="border-t border-ink/10">
+                    <tr key={r.rate_id} className="border-t border-white/10">
                       <td className="px-4 py-3">
-                        <div className="font-semibold text-ink">
+                        <div className="font-semibold text-white">
                           {r.carrier_friendly_name || "Carrier"} · {r.service_type}
                         </div>
-                        <div className="mt-1 text-xs text-ink/60">{r.service_code || r.rate_id}</div>
+                        <div className="mt-1 text-xs text-white/60">
+                          {r.service_code || r.rate_id}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-ink/80">
+
+                      <td className="px-4 py-3 text-white/80">
                         {typeof r.delivery_days === "number" ? (
-                          <>{r.delivery_days} day{r.delivery_days === 1 ? "" : "s"}</>
+                          <>
+                            {r.delivery_days} day{r.delivery_days === 1 ? "" : "s"}
+                          </>
                         ) : r.estimated_delivery_date ? (
                           new Date(r.estimated_delivery_date).toLocaleDateString("en-US", {
                             month: "short",
@@ -320,20 +373,27 @@ export default function RateLookupClient() {
                           "—"
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right font-extrabold text-ink">
+
+                      <td className="px-4 py-3 text-right font-extrabold text-white">
                         {money(Number(r.amount), (r.currency || "usd").toUpperCase())}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td className="px-4 py-6 text-sm text-ink/60" colSpan={3}>
-                      Enter an address and click <span className="font-semibold">Get rates</span>.
+                    <td className="px-4 py-6 text-sm text-white/60" colSpan={3}>
+                      Enter an address and click{" "}
+                      <span className="font-semibold text-white">Get rates</span>.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="mt-4 text-xs text-white/50">
+            Tip: Use presets for fast quoting, or switch to <span className="text-white/70">Custom</span>{" "}
+            for one-off store shipments.
           </div>
         </div>
       </div>

@@ -1,3 +1,4 @@
+// app/dashboard/admin/ebay/page.tsx
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/auth/isAdmin";
@@ -21,12 +22,15 @@ export default async function AdminEbayOrdersPage() {
   return (
     <div className="paper-shell">
       <Container className="py-14">
-        <Card>
+        {/* Force a dark card so ink (white) is readable */}
+        <Card className="border-white/10 bg-[#0B1220] text-white">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div className="caps text-[11px] text-ink/60">Admin · Channel</div>
-              <h1 className="mt-2 text-2xl font-extrabold tracking-tight">eBay Orders</h1>
-              <p className="mt-2 max-w-2xl text-sm text-ink/70">
+              <div className="caps text-[11px] text-white/60">Admin · Channel</div>
+              <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-white">
+                eBay Orders
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm text-white/70">
                 Import orders from eBay (Fulfillment API). Orders appear here only and can be
                 fulfilled with ShipEngine labels.
               </p>
