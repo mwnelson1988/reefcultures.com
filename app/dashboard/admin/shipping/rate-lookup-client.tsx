@@ -84,7 +84,7 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   );
 }
 
-// client-side validation helpers
+/** client-side normalization */
 function clean(s: string) {
   return (s || "").trim();
 }
@@ -99,6 +99,43 @@ function normalizePostal(s: string, country: string) {
   const p = clean(s);
   if (isUSCountry(country)) return p.replace(/[^\d]/g, "").slice(0, 5);
   return p;
+}
+
+/**
+ * ✅ KEY FIX:
+ * Autofill often doesn't trigger React onChange.
+ * So we always read the latest DOM values via FormData on submit.
+ */
+function readFormFromDOM(e: React.FormEvent<HTMLFormElement>, current: FormState): FormState {
+  const fd = new FormData(e.currentTarget);
+
+  const country = clean(String(fd.get("country") ?? current.country ?? "US")).toUpperCase().slice(0, 2) || "US";
+  const state = normalizeState2(String(fd.get("state") ?? current.state ?? ""));
+  const postal = normalizePostal(String(fd.get("postal") ?? current.postal ?? ""), country);
+
+  const preset = (String(fd.get("preset") ?? current.preset) as FormState["preset"]) || current.preset;
+
+  // For numeric fields, keep as strings (inputs are controlled)
+  const weightOz = clean(String(fd.get("weightOz") ?? current.weightOz ?? ""));
+  const lengthIn = clean(String(fd.get("lengthIn") ?? current.lengthIn ?? ""));
+  const widthIn = clean(String(fd.get("widthIn") ?? current.widthIn ?? ""));
+  const heightIn = clean(String(fd.get("heightIn") ?? current.heightIn ?? ""));
+
+  return {
+    ...current,
+    name: clean(String(fd.get("name") ?? current.name ?? "")),
+    address1: clean(String(fd.get("address1") ?? current.address1 ?? "")),
+    address2: clean(String(fd.get("address2") ?? current.address2 ?? "")),
+    city: clean(String(fd.get("city") ?? current.city ?? "")),
+    state,
+    postal,
+    country,
+    preset,
+    weightOz,
+    lengthIn,
+    widthIn,
+    heightIn,
+  };
 }
 
 export default function RateLookupClient() {
@@ -121,7 +158,6 @@ export default function RateLookupClient() {
   const [error, setError] = useState<string | null>(null);
   const [rates, setRates] = useState<Rate[]>([]);
 
-  // label creation state
   const [printingRateId, setPrintingRateId] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
 
@@ -140,12 +176,12 @@ export default function RateLookupClient() {
     }));
   }
 
-  function validateForm(): string | null {
-    const country = clean(form.country).toUpperCase() || "US";
-    const address1 = clean(form.address1);
-    const city = clean(form.city);
-    const postal = normalizePostal(form.postal, country);
-    const state = normalizeState2(form.state);
+  function validateForm(next: FormState): string | null {
+    const country = clean(next.country).toUpperCase() || "US";
+    const address1 = clean(next.address1);
+    const city = clean(next.city);
+    const postal = normalizePostal(next.postal, country);
+    const state = normalizeState2(next.state);
 
     if (!address1) return "Address line 1 is required.";
     if (!city) return "City is required.";
@@ -156,51 +192,57 @@ export default function RateLookupClient() {
       if (postal.length !== 5) return "ZIP must be 5 digits.";
     }
 
-    const w = Number(form.weightOz);
-    const l = Number(form.lengthIn);
-    const wi = Number(form.widthIn);
-    const h = Number(form.heightIn);
+    const w = Number(next.weightOz);
+    const l = Number(next.lengthIn);
+    const wi = Number(next.widthIn);
+    const h = Number(next.heightIn);
+
     if (!Number.isFinite(w) || w <= 0) return "Weight must be a number greater than 0.";
-    if (![l, wi, h].every((n) => Number.isFinite(n) && n > 0))
+    if (![l, wi, h].every((n) => Number.isFinite(n) && n > 0)) {
       return "Dimensions must be numbers greater than 0.";
+    }
 
     return null;
   }
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setPrintError(null);
     setRates([]);
+    setLoading(true);
 
-    const validationError = validateForm();
+    // ✅ Always pull latest values from the DOM (fixes autofill)
+    const next = readFormFromDOM(e, form);
+    setForm(next); // keep UI/state aligned
+
+    const validationError = validateForm(next);
     if (validationError) {
       setError(validationError);
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-
     try {
-      const country = clean(form.country).toUpperCase() || "US";
-      const postal = normalizePostal(form.postal, country);
-      const state = normalizeState2(form.state);
+      const country = clean(next.country).toUpperCase() || "US";
+      const postal = normalizePostal(next.postal, country);
+      const state = normalizeState2(next.state);
 
       const body = {
         to: {
-          name: clean(form.name) || "Store",
-          address_line1: clean(form.address1),
-          address_line2: clean(form.address2) || undefined,
-          city_locality: clean(form.city),
+          name: clean(next.name) || "Store",
+          address_line1: clean(next.address1),
+          address_line2: clean(next.address2) || undefined,
+          city_locality: clean(next.city),
           state_province: state,
           postal_code: postal,
           country_code: country,
         },
         pkg: {
-          weight_oz: Number(form.weightOz),
-          length_in: Number(form.lengthIn),
-          width_in: Number(form.widthIn),
-          height_in: Number(form.heightIn),
+          weight_oz: Number(next.weightOz),
+          length_in: Number(next.lengthIn),
+          width_in: Number(next.widthIn),
+          height_in: Number(next.heightIn),
         },
       };
 
@@ -262,18 +304,16 @@ export default function RateLookupClient() {
                 autoComplete="name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                onBlur={(e) => setForm((s) => ({ ...s, name: clean(e.target.value) }))}
                 placeholder="Store / Customer"
               />
             </Field>
 
             <Field label="Address line 1">
               <Input
-                name="address-line1"
+                name="address1"
                 autoComplete="address-line1"
                 value={form.address1}
                 onChange={(e) => setForm({ ...form, address1: e.target.value })}
-                onBlur={(e) => setForm((s) => ({ ...s, address1: clean(e.target.value) }))}
                 placeholder="1488 Page Industrial Blvd"
                 required
               />
@@ -281,22 +321,20 @@ export default function RateLookupClient() {
 
             <Field label="Address line 2">
               <Input
-                name="address-line2"
+                name="address2"
                 autoComplete="address-line2"
                 value={form.address2}
                 onChange={(e) => setForm({ ...form, address2: e.target.value })}
-                onBlur={(e) => setForm((s) => ({ ...s, address2: clean(e.target.value) }))}
               />
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="City">
                 <Input
-                  name="address-level2"
+                  name="city"
                   autoComplete="address-level2"
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  onBlur={(e) => setForm((s) => ({ ...s, city: clean(e.target.value) }))}
                   placeholder="St. Louis"
                   required
                 />
@@ -304,12 +342,11 @@ export default function RateLookupClient() {
 
               <Field label="State">
                 <Input
-                  name="address-level1"
+                  name="state"
                   autoComplete="address-level1"
                   value={form.state}
-                  onChange={(e) => setForm({ ...form, state: e.target.value })}
-                  onBlur={(e) =>
-                    setForm((s) => ({ ...s, state: normalizeState2(e.target.value) }))
+                  onChange={(e) =>
+                    setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })
                   }
                   placeholder="MO"
                   required
@@ -320,14 +357,10 @@ export default function RateLookupClient() {
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Postal code">
                 <Input
-                  name="postal-code"
+                  name="postal"
                   autoComplete="postal-code"
                   value={form.postal}
                   onChange={(e) => setForm({ ...form, postal: e.target.value })}
-                  onBlur={(e) => {
-                    const country = clean(form.country).toUpperCase() || "US";
-                    setForm((s) => ({ ...s, postal: normalizePostal(e.target.value, country) }));
-                  }}
                   placeholder="63132"
                   required
                 />
@@ -338,9 +371,8 @@ export default function RateLookupClient() {
                   name="country"
                   autoComplete="country"
                   value={form.country}
-                  onChange={(e) => setForm({ ...form, country: e.target.value })}
-                  onBlur={(e) =>
-                    setForm((s) => ({ ...s, country: clean(e.target.value).toUpperCase().slice(0, 2) }))
+                  onChange={(e) =>
+                    setForm({ ...form, country: e.target.value.toUpperCase().slice(0, 2) })
                   }
                   placeholder="US"
                   required
@@ -356,6 +388,7 @@ export default function RateLookupClient() {
           <div className="mt-4 grid gap-4">
             <Field label="Preset">
               <Select
+                name="preset"
                 value={form.preset}
                 onChange={(e) => {
                   const v = e.target.value as FormState["preset"];
@@ -374,6 +407,7 @@ export default function RateLookupClient() {
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Weight (oz)">
                 <Input
+                  name="weightOz"
                   value={form.weightOz}
                   onChange={(e) => setForm({ ...form, weightOz: e.target.value })}
                   inputMode="numeric"
@@ -386,6 +420,7 @@ export default function RateLookupClient() {
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Length (in)">
                 <Input
+                  name="lengthIn"
                   value={form.lengthIn}
                   onChange={(e) => setForm({ ...form, lengthIn: e.target.value })}
                   inputMode="numeric"
@@ -396,6 +431,7 @@ export default function RateLookupClient() {
 
               <Field label="Width (in)">
                 <Input
+                  name="widthIn"
                   value={form.widthIn}
                   onChange={(e) => setForm({ ...form, widthIn: e.target.value })}
                   inputMode="numeric"
@@ -406,6 +442,7 @@ export default function RateLookupClient() {
 
               <Field label="Height (in)">
                 <Input
+                  name="heightIn"
                   value={form.heightIn}
                   onChange={(e) => setForm({ ...form, heightIn: e.target.value })}
                   inputMode="numeric"
