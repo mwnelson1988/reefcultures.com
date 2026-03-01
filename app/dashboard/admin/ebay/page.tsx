@@ -1,47 +1,96 @@
-// app/dashboard/admin/ebay/page.tsx
-import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/server";
-import { isAdmin } from "@/lib/auth/isAdmin";
-import { Container } from "@/components/Container";
-import { Card } from "@/components/Card";
-import EbayClient from "./sync-client";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useState } from "react";
 
-export default async function AdminEbayOrdersPage() {
-  const supabase = await supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+type SyncResult = {
+  imported: number;
+  skipped: number;
+  message?: string;
+};
 
-  if (!user) redirect("/signin?next=/dashboard/admin/ebay");
+export default function EbayClient() {
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [result, setResult] = useState<SyncResult | null>(null);
 
-  const admin = await isAdmin();
-  if (!admin) redirect("/dashboard/overview");
+  async function syncNow() {
+    setLoading(true);
+    setMsg(null);
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/admin/ebay/sync", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Sync failed");
+
+      setResult({
+        imported: Number(data?.imported || 0),
+        skipped: Number(data?.skipped || 0),
+        message: data?.message,
+      });
+
+      if (data?.message) setMsg(String(data.message));
+    } catch (e: any) {
+      setMsg(e?.message || "Sync failed");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <div className="paper-shell">
-      <Container className="py-14">
-        {/* Force a dark card so ink (white) is readable */}
-        <Card className="border-white/10 bg-[#0B1220] text-white">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div className="caps text-[11px] text-white/60">Admin · Channel</div>
-              <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-white">
-                eBay Orders
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm text-white/70">
-                Import orders from eBay (Fulfillment API). Orders appear here only and can be
-                fulfilled with ShipEngine labels.
-              </p>
-            </div>
+    <div className="rounded-2xl border border-white/10 bg-[#0F1A2E] p-5 text-white">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-white">Import</div>
+          <div className="mt-1 text-xs text-white/60">
+            Your eBay Developer account must be approved and env vars configured.
           </div>
+        </div>
 
-          <div className="mt-8">
-            <EbayClient />
-          </div>
-        </Card>
-      </Container>
+        <button
+          onClick={syncNow}
+          disabled={loading}
+          className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.18em] text-[#0B1220] transition hover:opacity-95 disabled:opacity-60"
+        >
+          {loading ? "Syncing…" : "Sync now"}
+        </button>
+      </div>
+
+      {msg ? (
+        <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
+          {msg}
+        </div>
+      ) : null}
+
+      {result ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <Kpi label="Imported" value={String(result.imported)} />
+          <Kpi label="Skipped" value={String(result.skipped)} />
+          <Kpi label="Status" value="OK" />
+        </div>
+      ) : null}
+
+      <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
+        <div className="font-semibold">Not approved yet?</div>
+        <div className="mt-1">
+          If eBay says your Developer account is pending approval, that’s normal. Once approved,
+          add{" "}
+          <span className="font-mono text-[12px]">EBAY_CLIENT_ID</span>,{" "}
+          <span className="font-mono text-[12px]">EBAY_CLIENT_SECRET</span>, and{" "}
+          <span className="font-mono text-[12px]">EBAY_REFRESH_TOKEN</span> to your environment.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Kpi({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0B1220] p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/60">
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-extrabold tracking-tight text-white">{value}</div>
     </div>
   );
 }
