@@ -1,260 +1,209 @@
+// app/api/admin/shipping/rates/route.ts
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/auth/isAdmin";
 
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
+export const dynamic = "force-dynamic";
+
+type RateReqBody = {
+  to?: {
+    name?: string;
+    address_line1?: string;
+    address_line2?: string;
+    city_locality?: string;
+    state_province?: string;
+    postal_code?: string;
+    country_code?: string;
+
+    // allow legacy keys too (just in case)
+    address1?: string;
+    address2?: string;
+    city?: string;
+    state?: string;
+    postal?: string;
+    country?: string;
+  };
+  pkg?: {
+    weight_oz?: number;
+    length_in?: number;
+    width_in?: number;
+    height_in?: number;
+
+    // allow legacy keys too
+    weightOz?: number;
+    lengthIn?: number;
+    widthIn?: number;
+    heightIn?: number;
+  };
+};
+
+function clean(v: any) {
+  return String(v ?? "").trim();
 }
 
-function normalizePhone(input?: string) {
-  const digits = (input || "").replace(/[^\d]/g, "");
-  if (digits.length >= 10) return digits.slice(-10);
-  return "0000000000";
-}
-
-function normalizeState(input?: string) {
-  return (input || "").trim().toUpperCase().slice(0, 2);
-}
-
-function moneyToCents(amount: string | number) {
-  const n = typeof amount === "string" ? Number(amount) : amount;
-  if (!Number.isFinite(n) || n < 0) return 0;
-  return Math.round(n * 100);
-}
-
-let cachedCarrierIds: { ids: string[]; expiresAt: number } | null = null;
-
-async function getCarrierIds(apiKey: string) {
-  const now = Date.now();
-  if (cachedCarrierIds && cachedCarrierIds.expiresAt > now) {
-    return cachedCarrierIds.ids;
-  }
-
-  const raw = process.env.SHIPENGINE_CARRIER_IDS || "";
-  const fromEnv = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  if (fromEnv.length) {
-    cachedCarrierIds = { ids: fromEnv, expiresAt: now + 15 * 60 * 1000 };
-    return fromEnv;
-  }
-
-  const res = await fetch("https://api.shipengine.com/v1/carriers", {
-    method: "GET",
-    headers: { "Content-Type": "application/json", "API-Key": apiKey },
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg =
-      data?.errors?.[0]?.message ||
-      data?.message ||
-      "Unable to fetch carriers. Set SHIPENGINE_CARRIER_IDS in env.";
-    throw new Error(msg);
-  }
-
-  const ids = Array.isArray(data?.carriers)
-    ? data.carriers
-        .filter((c: any) => c?.carrier_id && c?.is_enabled !== false)
-        .map((c: any) => c.carrier_id)
-        .filter(Boolean)
-    : [];
-
-  if (!ids.length) {
-    throw new Error(
-      "No enabled carriers found. Enable USPS/UPS in ShipEngine or set SHIPENGINE_CARRIER_IDS."
-    );
-  }
-
-  cachedCarrierIds = { ids, expiresAt: now + 15 * 60 * 1000 };
-  return ids;
-}
-
-const ALLOW_SERVICE_CODE = new Set<string>([
-  "ups_next_day_air",
-  "ups_next_day_air_saver",
-  "ups_next_day_air_early_am",
-  "ups_2nd_day_air",
-  "ups_2nd_day_air_am",
-  "ups_3_day_select",
-  "usps_priority_mail_express",
-  "usps_priority_mail_express_hfp",
-  "usps_priority_mail",
-]);
-
-function isAllowedService(r: any) {
-  const code = String(r?.service_code || "").toLowerCase().trim();
-  const type = String(r?.service_type || "").toLowerCase().trim();
-  const carrier = String(r?.carrier_friendly_name || "").toLowerCase().trim();
-
-  if (code && ALLOW_SERVICE_CODE.has(code)) return true;
-
-  const text = `${carrier} ${type} ${code}`.toLowerCase();
-
-  if (text.includes("ups")) {
-    if (text.includes("next day") || text.includes("overnight")) return true;
-    if (text.includes("2nd day") || text.includes("2 day")) return true;
-    if (text.includes("3 day")) return true;
-    return false;
-  }
-
-  if (text.includes("usps")) {
-    if (text.includes("priority mail express")) return true;
-    if (text.includes("priority mail")) return true;
-    return false;
-  }
-
-  return false;
-}
-
-function speedBucket(r: any) {
-  const d = typeof r.delivery_days === "number" ? r.delivery_days : null;
-  if (d != null) {
-    if (d <= 1) return "overnight";
-    if (d <= 2) return "2day";
-    return "3day";
-  }
-  return "3day";
-}
-
-function dedupeAndCap(rates: any[]) {
-  const best = new Map<string, any>();
-
-  for (const r of rates) {
-    const carrier = String(r.carrier_friendly_name || "").toLowerCase();
-    const bucket = speedBucket(r);
-    const key = `${carrier}|${bucket}`;
-    const existing = best.get(key);
-
-    if (!existing || moneyToCents(r.amount) < moneyToCents(existing.amount)) {
-      best.set(key, r);
-    }
-  }
-
-  const out = Array.from(best.values());
-
-  const order: Record<string, number> = { overnight: 1, "2day": 2, "3day": 3 };
-
-  out.sort((a, b) => {
-    const ab = speedBucket(a);
-    const bb = speedBucket(b);
-    const o = (order[ab] || 99) - (order[bb] || 99);
-    if (o !== 0) return o;
-    return moneyToCents(a.amount) - moneyToCents(b.amount);
-  });
-
-  return out.slice(0, 8);
+function num(v: any, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 export async function POST(req: Request) {
+  // ✅ Auth gate (admin only)
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userErr,
+  } = await supabase.auth.getUser();
+
+  if (userErr || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const admin = await isAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // ✅ Env check
+  const shipEngineKey =
+    process.env.SHIPENGINE_API_KEY ||
+    process.env.SHIPENGINE_KEY ||
+    process.env.SHIP_ENGINE_API_KEY;
+
+  if (!shipEngineKey) {
+    return NextResponse.json(
+      { error: "Missing SHIPENGINE_API_KEY env var" },
+      { status: 500 }
+    );
+  }
+
+  let body: RateReqBody = {};
   try {
-    const supabase = await supabaseServer();
+    body = (await req.json()) as RateReqBody;
+  } catch {
+    body = {};
+  }
 
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
+  const toRaw = body.to ?? {};
+  const pkgRaw = body.pkg ?? {};
 
-    if (error || !user) return jsonError("Unauthorized", 401);
+  // ✅ IMPORTANT: read address_line1 (and fallback to address1)
+  const to = {
+    name: clean(toRaw.name) || "Store",
+    address_line1: clean(toRaw.address_line1 || toRaw.address1),
+    address_line2: clean(toRaw.address_line2 || toRaw.address2),
+    city_locality: clean(toRaw.city_locality || toRaw.city),
+    state_province: clean(toRaw.state_province || toRaw.state),
+    postal_code: clean(toRaw.postal_code || toRaw.postal),
+    country_code: (clean(toRaw.country_code || toRaw.country) || "US").toUpperCase(),
+  };
 
-    // ✅ PASS USER INTO isAdmin
-    const admin = await isAdmin(user);
-    if (!admin) return jsonError("Forbidden", 403);
+  const pkg = {
+    weight_oz: num(pkgRaw.weight_oz ?? pkgRaw.weightOz, 0),
+    length_in: num(pkgRaw.length_in ?? pkgRaw.lengthIn, 0),
+    width_in: num(pkgRaw.width_in ?? pkgRaw.widthIn, 0),
+    height_in: num(pkgRaw.height_in ?? pkgRaw.heightIn, 0),
+  };
 
-    const SHIPENGINE_API_KEY =
-      process.env.SHIPENGINE_API_KEY || process.env.SHIPSTATION_API_KEY;
+  // ✅ Validate BEFORE calling ShipEngine (no more provider error strings)
+  if (!to.address_line1) {
+    return NextResponse.json({ error: "Address line 1 is required." }, { status: 400 });
+  }
+  if (!to.city_locality) {
+    return NextResponse.json({ error: "City is required." }, { status: 400 });
+  }
+  if (!to.state_province) {
+    return NextResponse.json({ error: "State is required." }, { status: 400 });
+  }
+  if (!to.postal_code) {
+    return NextResponse.json({ error: "Postal code is required." }, { status: 400 });
+  }
+  if (!pkg.weight_oz || pkg.weight_oz <= 0) {
+    return NextResponse.json({ error: "Weight must be > 0." }, { status: 400 });
+  }
+  if (![pkg.length_in, pkg.width_in, pkg.height_in].every((n) => n > 0)) {
+    return NextResponse.json({ error: "Dimensions must be > 0." }, { status: 400 });
+  }
 
-    if (!SHIPENGINE_API_KEY) {
-      return jsonError("Missing SHIPENGINE_API_KEY in environment", 500);
-    }
+  // ✅ Ship-from (your defaults; override via env if you want)
+  const shipFrom = {
+    name: process.env.SHIP_FROM_NAME || "ReefCultures",
+    address_line1: process.env.SHIP_FROM_ADDRESS1 || "1488 Page Industrial Blvd",
+    address_line2: process.env.SHIP_FROM_ADDRESS2 || "",
+    city_locality: process.env.SHIP_FROM_CITY || "St. Louis",
+    state_province: process.env.SHIP_FROM_STATE || "MO",
+    postal_code: process.env.SHIP_FROM_POSTAL || process.env.SHIP_FROM_ZIP || "63132",
+    country_code: (process.env.SHIP_FROM_COUNTRY || "US").toUpperCase(),
+  };
 
-    const body = (await req.json().catch(() => ({}))) as any;
-    const to = body?.to || {};
-    const pkg = body?.pkg || {};
-
-    if (!to.address_line1 || !to.city_locality || !to.state_province || !to.postal_code) {
-      return jsonError("Missing destination address fields", 400);
-    }
-
-    const weight_oz = Number(pkg.weight_oz);
-    const length_in = Number(pkg.length_in);
-    const width_in = Number(pkg.width_in);
-    const height_in = Number(pkg.height_in);
-
-    if (!Number.isFinite(weight_oz) || weight_oz <= 0) return jsonError("Invalid weight_oz", 400);
-    if (![length_in, width_in, height_in].every((n) => Number.isFinite(n) && n > 0)) {
-      return jsonError("Invalid dimensions", 400);
-    }
-
-    const carrier_ids = await getCarrierIds(SHIPENGINE_API_KEY);
-
-    const payload: any = {
-      rate_options: { carrier_ids },
-      shipment: {
-        ship_from: {
-          name: process.env.SHIP_FROM_NAME || "ReefCultures",
-          company_name: process.env.SHIP_FROM_COMPANY || "ReefCultures",
-          phone: normalizePhone(process.env.SHIP_FROM_PHONE),
-          address_line1: process.env.SHIP_FROM_ADDRESS1,
-          city_locality: process.env.SHIP_FROM_CITY,
-          state_province: normalizeState(process.env.SHIP_FROM_STATE),
-          postal_code: process.env.SHIP_FROM_POSTAL_CODE,
-          country_code: process.env.SHIP_FROM_COUNTRY || "US",
-        },
-        ship_to: {
-          name: to.name || "Store",
-          phone: normalizePhone(to.phone),
-          address_line1: to.address_line1,
-          address_line2: to.address_line2 || undefined,
-          city_locality: to.city_locality,
-          state_province: normalizeState(to.state_province),
-          postal_code: to.postal_code,
-          country_code: (to.country_code || "US").toUpperCase(),
-        },
-        packages: [
-          {
-            weight: { value: weight_oz, unit: "ounce" },
-            dimensions: { length: length_in, width: width_in, height: height_in, unit: "inch" },
+  // ✅ ShipEngine: Rate Estimate
+  // Docs: POST https://api.shipengine.com/v1/rates/estimate
+  const sePayload = {
+    shipment: {
+      ship_from: shipFrom,
+      ship_to: to,
+      packages: [
+        {
+          weight: { value: pkg.weight_oz, unit: "ounce" },
+          dimensions: {
+            unit: "inch",
+            length: pkg.length_in,
+            width: pkg.width_in,
+            height: pkg.height_in,
           },
-        ],
-      },
-    };
+        },
+      ],
+    },
+  };
 
-    const seRes = await fetch("https://api.shipengine.com/v1/rates", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "API-Key": SHIPENGINE_API_KEY },
-      body: JSON.stringify(payload),
-    });
+  const resp = await fetch("https://api.shipengine.com/v1/rates/estimate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "API-Key": shipEngineKey,
+    },
+    body: JSON.stringify(sePayload),
+  });
 
-    const seData = await seRes.json().catch(() => ({}));
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    return NextResponse.json(
+      { error: "ShipEngine rate request failed", details: text },
+      { status: 502 }
+    );
+  }
 
-    if (!seRes.ok) {
-      return jsonError(seData?.errors?.[0]?.message || "ShipEngine rate error", 400);
-    }
+  const data = await resp.json().catch(() => ({}));
 
-    const ratesRaw = Array.isArray(seData?.rate_response?.rates)
-      ? seData.rate_response.rates
+  const ratesRaw: any[] = Array.isArray(data?.rate_response?.rates)
+    ? data.rate_response.rates
+    : Array.isArray(data?.rates)
+      ? data.rates
       : [];
 
-    const mapped = ratesRaw
-      .map((r: any) => ({
-        rate_id: r.rate_id,
-        carrier_friendly_name: r.carrier_friendly_name,
-        service_type: r.service_type,
-        service_code: r.service_code,
-        amount: Number(r.shipping_amount?.amount ?? r.amount),
-        currency: r.shipping_amount?.currency ?? r.currency ?? "usd",
-        delivery_days: r.delivery_days ?? null,
-      }))
-      .filter((r: any) => r.rate_id && Number.isFinite(r.amount));
+  // Shape exactly like your Rate type in the client
+  const rates = ratesRaw
+    .map((r) => {
+      const amount =
+        typeof r?.shipping_amount?.amount === "number"
+          ? r.shipping_amount.amount
+          : typeof r?.rate === "number"
+            ? r.rate
+            : typeof r?.amount === "number"
+              ? r.amount
+              : null;
 
-    const allowed = mapped.filter(isAllowedService);
-    const rates = dedupeAndCap(allowed);
+      return {
+        rate_id: String(r?.rate_id ?? r?.rateId ?? r?.id ?? ""),
+        carrier_friendly_name: r?.carrier_friendly_name ?? r?.carrier ?? r?.carrier_code ?? undefined,
+        service_type: r?.service_type ?? r?.service_code ?? r?.service ?? "Service",
+        service_code: r?.service_code ?? r?.service_type ?? undefined,
+        amount: amount ?? 0,
+        currency: (r?.shipping_amount?.currency ?? r?.currency ?? "USD").toUpperCase(),
+        delivery_days: r?.delivery_days ?? r?.estimated_delivery_days ?? null,
+        estimated_delivery_date: r?.estimated_delivery_date ?? null,
+      };
+    })
+    .filter((r) => r.rate_id && typeof r.amount === "number" && r.amount >= 0);
 
-    return NextResponse.json({ rates });
-  } catch (err: any) {
-    return jsonError(err?.message || "Failed to fetch rates", 500);
-  }
+  return NextResponse.json({ rates });
 }
