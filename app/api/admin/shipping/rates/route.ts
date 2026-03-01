@@ -23,9 +23,12 @@ function moneyToCents(amount: string | number) {
 }
 
 let cachedCarrierIds: { ids: string[]; expiresAt: number } | null = null;
+
 async function getCarrierIds(apiKey: string) {
   const now = Date.now();
-  if (cachedCarrierIds && cachedCarrierIds.expiresAt > now) return cachedCarrierIds.ids;
+  if (cachedCarrierIds && cachedCarrierIds.expiresAt > now) {
+    return cachedCarrierIds.ids;
+  }
 
   const raw = process.env.SHIPENGINE_CARRIER_IDS || "";
   const fromEnv = raw
@@ -70,15 +73,12 @@ async function getCarrierIds(apiKey: string) {
 }
 
 const ALLOW_SERVICE_CODE = new Set<string>([
-  // UPS
   "ups_next_day_air",
   "ups_next_day_air_saver",
   "ups_next_day_air_early_am",
   "ups_2nd_day_air",
   "ups_2nd_day_air_am",
   "ups_3_day_select",
-
-  // USPS
   "usps_priority_mail_express",
   "usps_priority_mail_express_hfp",
   "usps_priority_mail",
@@ -94,12 +94,9 @@ function isAllowedService(r: any) {
   const text = `${carrier} ${type} ${code}`.toLowerCase();
 
   if (text.includes("ups")) {
-    if (text.includes("next day") || text.includes("next-day") || text.includes("overnight"))
-      return true;
-    if (text.includes("2nd day") || text.includes("second day") || text.includes("2 day"))
-      return true;
-    if (text.includes("3 day") || text.includes("3-day") || text.includes("3 day select"))
-      return true;
+    if (text.includes("next day") || text.includes("overnight")) return true;
+    if (text.includes("2nd day") || text.includes("2 day")) return true;
+    if (text.includes("3 day")) return true;
     return false;
   }
 
@@ -112,18 +109,13 @@ function isAllowedService(r: any) {
   return false;
 }
 
-function speedBucket(r: { service_code: string; service_type: string; delivery_days: number | null }) {
+function speedBucket(r: any) {
   const d = typeof r.delivery_days === "number" ? r.delivery_days : null;
   if (d != null) {
     if (d <= 1) return "overnight";
     if (d <= 2) return "2day";
     return "3day";
   }
-
-  const text = `${r.service_code || ""} ${r.service_type || ""}`.toLowerCase();
-  if (text.includes("next_day") || text.includes("next day") || text.includes("overnight"))
-    return "overnight";
-  if (text.includes("2nd") || text.includes("2 day") || text.includes("second day")) return "2day";
   return "3day";
 }
 
@@ -135,15 +127,16 @@ function dedupeAndCap(rates: any[]) {
     const bucket = speedBucket(r);
     const key = `${carrier}|${bucket}`;
     const existing = best.get(key);
-    if (!existing) {
+
+    if (!existing || moneyToCents(r.amount) < moneyToCents(existing.amount)) {
       best.set(key, r);
-      continue;
     }
-    if (moneyToCents(r.amount) < moneyToCents(existing.amount)) best.set(key, r);
   }
 
   const out = Array.from(best.values());
+
   const order: Record<string, number> = { overnight: 1, "2day": 2, "3day": 3 };
+
   out.sort((a, b) => {
     const ab = speedBucket(a);
     const bb = speedBucket(b);
@@ -158,6 +151,7 @@ function dedupeAndCap(rates: any[]) {
 export async function POST(req: Request) {
   try {
     const supabase = await supabaseServer();
+
     const {
       data: { user },
       error,
@@ -165,31 +159,15 @@ export async function POST(req: Request) {
 
     if (error || !user) return jsonError("Unauthorized", 401);
 
-    const admin = await isAdmin();
+    // ✅ PASS USER INTO isAdmin
+    const admin = await isAdmin(user);
     if (!admin) return jsonError("Forbidden", 403);
 
-    const SHIPENGINE_API_KEY = process.env.SHIPENGINE_API_KEY || process.env.SHIPSTATION_API_KEY;
+    const SHIPENGINE_API_KEY =
+      process.env.SHIPENGINE_API_KEY || process.env.SHIPSTATION_API_KEY;
+
     if (!SHIPENGINE_API_KEY) {
       return jsonError("Missing SHIPENGINE_API_KEY in environment", 500);
-    }
-
-    const from_name = process.env.SHIP_FROM_NAME || process.env.SHIP_FROM_COMPANY || "ReefCultures";
-    const from_company = process.env.SHIP_FROM_COMPANY || "ReefCultures";
-    const from_phone = normalizePhone(process.env.SHIP_FROM_PHONE);
-
-    const from_address1 = process.env.SHIP_FROM_ADDRESS1 || process.env.SHIP_FROM_STREET1 || "";
-    const from_address2 = process.env.SHIP_FROM_ADDRESS2 || "";
-
-    const from_city = process.env.SHIP_FROM_CITY || "";
-    const from_state = normalizeState(process.env.SHIP_FROM_STATE);
-    const from_postal = process.env.SHIP_FROM_POSTAL_CODE || process.env.SHIP_FROM_ZIP || "";
-    const from_country = (process.env.SHIP_FROM_COUNTRY || "US").toUpperCase();
-
-    if (!from_address1 || !from_city || !from_state || !from_postal) {
-      return jsonError(
-        "Missing SHIP_FROM_* origin address env vars (address1/city/state/postal).",
-        500
-      );
     }
 
     const body = (await req.json().catch(() => ({}))) as any;
@@ -210,35 +188,30 @@ export async function POST(req: Request) {
       return jsonError("Invalid dimensions", 400);
     }
 
-    const shipToCountry = (to.country_code || "US").toUpperCase();
-    const shipToState = normalizeState(to.state_province);
-    const shipToPhone = normalizePhone(to.phone);
-
     const carrier_ids = await getCarrierIds(SHIPENGINE_API_KEY);
 
     const payload: any = {
       rate_options: { carrier_ids },
       shipment: {
         ship_from: {
-          name: from_name,
-          company_name: from_company,
-          phone: from_phone,
-          address_line1: from_address1,
-          address_line2: from_address2 || undefined,
-          city_locality: from_city,
-          state_province: from_state,
-          postal_code: from_postal,
-          country_code: from_country,
+          name: process.env.SHIP_FROM_NAME || "ReefCultures",
+          company_name: process.env.SHIP_FROM_COMPANY || "ReefCultures",
+          phone: normalizePhone(process.env.SHIP_FROM_PHONE),
+          address_line1: process.env.SHIP_FROM_ADDRESS1,
+          city_locality: process.env.SHIP_FROM_CITY,
+          state_province: normalizeState(process.env.SHIP_FROM_STATE),
+          postal_code: process.env.SHIP_FROM_POSTAL_CODE,
+          country_code: process.env.SHIP_FROM_COUNTRY || "US",
         },
         ship_to: {
           name: to.name || "Store",
-          phone: shipToPhone,
+          phone: normalizePhone(to.phone),
           address_line1: to.address_line1,
           address_line2: to.address_line2 || undefined,
           city_locality: to.city_locality,
-          state_province: shipToState,
+          state_province: normalizeState(to.state_province),
           postal_code: to.postal_code,
-          country_code: shipToCountry,
+          country_code: (to.country_code || "US").toUpperCase(),
         },
         packages: [
           {
@@ -256,23 +229,24 @@ export async function POST(req: Request) {
     });
 
     const seData = await seRes.json().catch(() => ({}));
+
     if (!seRes.ok) {
       return jsonError(seData?.errors?.[0]?.message || "ShipEngine rate error", 400);
     }
 
-    const ratesRaw = Array.isArray(seData?.rate_response?.rates) ? seData.rate_response.rates : [];
+    const ratesRaw = Array.isArray(seData?.rate_response?.rates)
+      ? seData.rate_response.rates
+      : [];
 
     const mapped = ratesRaw
       .map((r: any) => ({
         rate_id: r.rate_id,
-        carrier_id: r.carrier_id,
         carrier_friendly_name: r.carrier_friendly_name,
         service_type: r.service_type,
         service_code: r.service_code,
         amount: Number(r.shipping_amount?.amount ?? r.amount),
         currency: r.shipping_amount?.currency ?? r.currency ?? "usd",
         delivery_days: r.delivery_days ?? null,
-        estimated_delivery_date: r.estimated_delivery_date ?? null,
       }))
       .filter((r: any) => r.rate_id && Number.isFinite(r.amount));
 

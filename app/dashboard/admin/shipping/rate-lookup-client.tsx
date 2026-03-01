@@ -104,6 +104,10 @@ export default function RateLookupClient() {
   const [error, setError] = useState<string | null>(null);
   const [rates, setRates] = useState<Rate[]>([]);
 
+  // NEW: label creation state
+  const [printingRateId, setPrintingRateId] = useState<string | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+
   const dimsDisabled = useMemo(() => form.preset !== "CUSTOM", [form.preset]);
 
   function applyPreset(p: FormState["preset"]) {
@@ -161,6 +165,33 @@ export default function RateLookupClient() {
       setError(err?.message || "Failed to fetch rates");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // NEW: create label + open PDF
+  async function printLabel(rateId: string) {
+    setPrintError(null);
+    setPrintingRateId(rateId);
+
+    try {
+      const res = await fetch("/api/admin/shipping/label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rate_id: rateId }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to create label");
+
+      const url = data?.label_url as string | undefined;
+      if (!url) throw new Error("Label created but no label_url was returned");
+
+      // Open PDF in a new tab; user can print from the PDF viewer
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      setPrintError(e?.message || "Failed to create label");
+    } finally {
+      setPrintingRateId(null);
     }
   }
 
@@ -330,6 +361,13 @@ export default function RateLookupClient() {
             </div>
           </div>
 
+          {/* NEW: show label errors here */}
+          {printError ? (
+            <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {printError}
+            </div>
+          ) : null}
+
           <div className="mt-5 overflow-hidden rounded-xl border border-white/10">
             <table className="w-full text-sm">
               <thead className="bg-white/5">
@@ -374,8 +412,21 @@ export default function RateLookupClient() {
                         )}
                       </td>
 
-                      <td className="px-4 py-3 text-right font-extrabold text-white">
-                        {money(Number(r.amount), (r.currency || "usd").toUpperCase())}
+                      {/* UPDATED: cost cell now includes Print Label */}
+                      <td className="px-4 py-3 text-right">
+                        <div className="font-extrabold text-white">
+                          {money(Number(r.amount), (r.currency || "usd").toUpperCase())}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => printLabel(r.rate_id)}
+                          disabled={printingRateId === r.rate_id}
+                          className="mt-2 inline-flex items-center justify-center rounded-lg bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0B1220] transition hover:opacity-95 disabled:opacity-60"
+                          title="Creates (buys) a label in ShipEngine and opens the PDF"
+                        >
+                          {printingRateId === r.rate_id ? "Creating…" : "Print label"}
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -392,8 +443,8 @@ export default function RateLookupClient() {
           </div>
 
           <div className="mt-4 text-xs text-white/50">
-            Tip: Use presets for fast quoting, or switch to <span className="text-white/70">Custom</span>{" "}
-            for one-off store shipments.
+            Tip: Use presets for fast quoting, or switch to{" "}
+            <span className="text-white/70">Custom</span> for one-off store shipments.
           </div>
         </div>
       </div>
