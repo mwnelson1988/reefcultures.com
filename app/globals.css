@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Lighter premium slate */
+  --bg: 18 24 32;
+  --bg2: 22 30 40;
+  --bg3: 14 18 24;
+
+  --ink: 250 252 255;
+  --muted: 214 222 232;
+
+  --panel: 28 38 50;
+  --hair: 255 255 255;
+
+  --accent: 29 211 197;
+}
+
+html,
+body {
+  height: 100%;
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Text tokens */
+.text-muted {
+  color: rgba(var(--muted), 0.92);
+}
+.text-ink {
+  color: rgb(var(--ink));
+}
+
+/* Background tokens */
+.bg-bg {
+  background: rgb(var(--bg));
+}
+.bg-band {
+  background: rgb(var(--bg2));
+}
+.bg-band-dark {
+  background: rgb(var(--bg3));
+}
+
+/* Panels */
+.bg-panel\/10 {
+  background: rgba(var(--panel), 0.72);
+}
+
+/* Borders */
+.border-hair {
+  border-color: rgba(var(--hair), 0.18);
+}
+.bg-hair {
+  background: rgba(var(--hair), 0.16);
+}
+
+/* Layout */
+.rc-container {
+  width: 100%;
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 22px;
+  padding-right: 22px;
+}
+
+.rc-section {
+  padding-top: 60px;
+  padding-bottom: 60px;
+}
+
+@media (min-width: 768px) {
+  .rc-section {
+    padding-top: 84px;
+    padding-bottom: 84px;
+  }
+}
+
+.rc-kicker {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: rgba(var(--muted), 0.86);
+}
+
+/* Type */
+.text-hero {
+  font-size: clamp(2rem, 4.2vw, 3.7rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+.text-display {
+  font-size: clamp(1.65rem, 3vw, 2.7rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+/* Background treatment */
+.bg-ocean-radial {
+  background:
+    radial-gradient(
+      1100px 620px at 50% -18%,
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(18, 24, 32, 0) 62%
+    ),
+    radial-gradient(
+      760px 460px at 85% 15%,
+      rgba(29, 211, 197, 0.07) 0%,
+      rgba(18, 24, 32, 0) 65%
+    );
+}
+
+.rc-divider {
+  height: 1px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.rc-box {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(var(--panel), 0.70);
+}
+
+.text-accent {
+  color: rgba(var(--accent), 0.95);
+}
+.border-accent {
+  border-color: rgba(var(--accent), 0.65);
+}
+
+::selection {
+  background: rgba(var(--accent), 0.22);
+}
