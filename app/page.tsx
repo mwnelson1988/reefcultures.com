@@ -24,8 +24,8 @@ const pillars = [
 ];
 
 const shippingFacts = [
-  { k: "Shipping", v: "$12 under $50" },
-  { k: "Threshold", v: "Free shipping at $50+" },
+  { k: "Launch pricing", v: "Shipped pricing on every bottle" },
+  { k: "Shipping", v: "Cold-chain shipping included" },
   { k: "Handling", v: "Refrigerated live culture" },
   { k: "Checkout", v: "Secure Stripe checkout" },
 ];
@@ -123,18 +123,17 @@ export default function HomePage() {
           <div className="max-w-4xl">
             <Reveal>
               <div className="rc-kicker text-muted">ReefCultures</div>
+              <div className="mt-4 inline-flex items-center rounded-full border border-[rgba(29,211,197,0.28)] bg-[rgba(29,211,197,0.08)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[rgba(29,211,197,0.92)]">Launch pricing • shipping included on every bottle</div>
               <h1 className="mt-5 text-hero font-extrabold">
                 Premium live phytoplankton
                 <br />
-                for serious reef routines.
+                with shipped pricing built in.
               </h1>
             </Reveal>
 
             <Reveal delay={0.08}>
               <p className="mt-7 max-w-3xl text-muted leading-relaxed">
-                Refrigerated live marine phytoplankton with batch-tracked positioning,
-                cold-chain minded handling, and a cleaner premium storefront built for
-                reef keepers who value consistency.
+                Fresh refrigerated marine phytoplankton with batch-tracked positioning, cold-chain shipping included, and a cleaner premium storefront built to convert serious reef keepers into repeat customers.
               </p>
             </Reveal>
 
@@ -144,13 +143,13 @@ export default function HomePage() {
                   href="/store/phyto-32oz"
                   className="inline-flex items-center justify-center px-7 py-3 bg-ink text-bg text-[12px] font-semibold uppercase tracking-[0.20em] hover:bg-accent transition"
                 >
-                  Shop best seller
+                  Shop 32oz best seller
                 </Link>
                 <Link
                   href="/science"
                   className="inline-flex items-center justify-center px-7 py-3 border border-hair text-[12px] font-semibold uppercase tracking-[0.20em] text-muted hover:text-ink hover:border-accent transition"
                 >
-                  Explore process
+                  See quality process
                 </Link>
               </div>
             </Reveal>

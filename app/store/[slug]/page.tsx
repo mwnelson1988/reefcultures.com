@@ -86,7 +86,7 @@ export default function ProductPage() {
                   {[
                     ["Best for", product.bestFor],
                     ["Positioning", product.approxCoverage],
-                    ["Shipping", "$12 under $50 • free at $50+"],
+                    ["Shipping", "Cold-chain shipping included"],
                   ].map(([label, value]) => (
                     <div
                       key={label}
@@ -105,7 +105,7 @@ export default function ProductPage() {
                     onClick={() => startCheckout(product.slug)}
                     className="inline-flex items-center justify-center px-6 py-3 bg-ink text-bg text-[12px] font-semibold uppercase tracking-[0.18em] hover:bg-accent transition"
                   >
-                    Buy {product.priceLabel}
+                    Buy for {product.priceLabel}
                   </button>
 
                   <Link
@@ -180,9 +180,7 @@ export default function ProductPage() {
                 <div className="rc-kicker text-muted">Why this size works</div>
                 <h2 className="mt-4 text-display font-bold">Built for a cleaner purchase decision.</h2>
                 <p className="mt-6 text-muted leading-relaxed">
-                  This page now leads with fit, shipping clarity, and usage context
-                  so the customer understands not just what the bottle is, but who it
-                  is best for.
+                  This page now leads with fit, shipped pricing, and usage context so the customer understands not just what the bottle is, but who it is best for.
                 </p>
               </Reveal>
             </div>
@@ -208,7 +206,7 @@ export default function ProductPage() {
             {[
               ["Storage", "Keep refrigerated. Shake gently before use. Do not freeze."],
               ["Routine", "Start modestly, watch system response, then increase only if your reef shows demand."],
-              ["Transit", "Cold-chain oriented packing keeps the product story aligned with a premium live culture."],
+              ["Transit", "Cold-chain shipping is included so checkout stays clean and predictable."],
             ].map(([t, d], idx) => (
               <Reveal key={t} delay={0.08 + idx * 0.05}>
                 <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 ring-1 ring-white/[0.06]">

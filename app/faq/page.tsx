@@ -16,7 +16,7 @@ const faqs = [
   ],
   [
     "How is it shipped?",
-    "Orders are positioned around cold-chain minded handling for refrigerated live culture transit. Shipping is $12 under $50 and free at $50+.",
+    "Orders ship cold-chain with shipped pricing built into each bottle, so there is no extra shipping fee added at checkout.",
   ],
   [
     "Is it safe for reef systems?",

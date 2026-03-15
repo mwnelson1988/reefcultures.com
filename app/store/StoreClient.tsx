@@ -282,15 +282,13 @@ export default function StoreClient({ isSignedIn = false }: StoreClientProps) {
               Choose the bottle that matches your reef routine.
             </h1>
             <p className="mt-5 max-w-3xl text-muted leading-relaxed">
-              The store now leads with product fit, shipping clarity, and a more
-              premium buying path so customers can choose a size quickly and check out
-              with confidence.
+              The store now leads with product fit, shipped pricing, and a cleaner buying path so customers can choose a size quickly and check out without a surprise shipping fee.
             </p>
           </Reveal>
 
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {[
-              ["Cold-chain shipping", "$12 under $50 • free at $50+"],
+              ["Shipping", "Cold-chain shipping included"],
               ["Positioning", "Refrigerated live culture for premium reef routines"],
               ["Checkout", "Guest checkout or account checkout through Stripe"],
             ].map(([label, value]) => (
@@ -363,6 +361,7 @@ export default function StoreClient({ isSignedIn = false }: StoreClientProps) {
                           Price
                         </div>
                         <div className="mt-2 text-[30px] font-semibold">{p.priceLabel}</div>
+                        <div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[rgba(29,211,197,0.85)]">Shipping included</div>
                       </div>
                     </div>
 
@@ -391,7 +390,7 @@ export default function StoreClient({ isSignedIn = false }: StoreClientProps) {
                         onClick={() => onBuyClick(p.slug)}
                         className="px-6 py-3 bg-ink text-bg text-[12px] font-semibold uppercase tracking-[0.20em] hover:bg-[rgba(29,211,197,0.95)] transition"
                       >
-                        Buy now
+                        Buy shipped
                       </button>
 
                       <Link

@@ -6,9 +6,6 @@ import { createServerClient } from "@supabase/auth-helpers-nextjs";
 
 const stripe = new Stripe(mustGetEnv("STRIPE_SECRET_KEY"));
 
-const FREE_SHIPPING_THRESHOLD_CENTS = 5000;
-const STANDARD_SHIPPING_CENTS = 1200;
-
 type ProductConfig = {
   slug: string;
   name: string;
@@ -67,7 +64,7 @@ function getProductConfig(slug: string): ProductConfig {
     return {
       slug: "phyto-16oz",
       name: "Reef Cultures 16oz Phyto",
-      unitAmountCents: 1999,
+      unitAmountCents: 1699,
       priceId: assertStripePriceId(
         mustGetEnv("STRIPE_PRICE_PHYTO_16OZ"),
         "STRIPE_PRICE_PHYTO_16OZ"
@@ -79,7 +76,7 @@ function getProductConfig(slug: string): ProductConfig {
     return {
       slug: "phyto-32oz",
       name: "Reef Cultures 32oz Phyto",
-      unitAmountCents: 2799,
+      unitAmountCents: 2599,
       priceId: assertStripePriceId(
         mustGetEnv("STRIPE_PRICE_PHYTO_32OZ"),
         "STRIPE_PRICE_PHYTO_32OZ"
@@ -138,43 +135,21 @@ async function getSignedInUser() {
   return { user, error };
 }
 
-function shippingCentsForSubtotal(subtotalCents: number) {
-  return subtotalCents >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : STANDARD_SHIPPING_CENTS;
-}
 
 function buildLineItems(slug: string, quantity: number): Stripe.Checkout.SessionCreateParams.LineItem[] {
   const product = getProductConfig(slug);
-  const subtotalCents = product.unitAmountCents * quantity;
-  const shippingCents = shippingCentsForSubtotal(subtotalCents);
 
-  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+  return [
     {
       price: product.priceId,
       quantity,
     },
   ];
-
-  if (shippingCents > 0) {
-    lineItems.push({
-      price_data: {
-        currency: "usd",
-        product_data: {
-          name: "Shipping",
-          description: "Cold-chain shipping",
-        },
-        unit_amount: shippingCents,
-      },
-      quantity: 1,
-    });
-  }
-
-  return lineItems;
 }
 
 function buildMetadata(slug: string, quantity: number, userId: string | undefined, guest: boolean) {
   const product = getProductConfig(slug);
   const subtotalCents = product.unitAmountCents * quantity;
-  const shippingCents = shippingCentsForSubtotal(subtotalCents);
 
   return {
     slug: product.slug,
@@ -182,9 +157,8 @@ function buildMetadata(slug: string, quantity: number, userId: string | undefine
     user_id: userId ?? "guest",
     guest: guest ? "1" : "0",
     subtotal_cents: String(subtotalCents),
-    shipping_cents: String(shippingCents),
-    free_shipping_threshold_cents: String(FREE_SHIPPING_THRESHOLD_CENTS),
-    shipping_rule: shippingCents > 0 ? "under_50_flat_12" : "free_over_50",
+    shipping_cents: "0",
+    shipping_rule: "included_in_price",
   };
 }
 

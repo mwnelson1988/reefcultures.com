@@ -18,11 +18,11 @@ export const products: Product[] = [
     size: "16oz",
     subtitle:
       "Fresh refrigerated marine culture for nano reefs, smaller systems, and first-time daily dosing routines.",
-    priceLabel: "$19.99",
+    priceLabel: "$16.99",
     priceIdEnv: "STRIPE_PRICE_PHYTO_16OZ",
     bullets: [
       "Batch tracked",
-      "Cold-chain packed",
+      "Shipping included",
       "Easy entry point for consistent daily dosing",
     ],
     bestFor: "Nano reefs, mixed reefs, and first-time buyers",
@@ -35,11 +35,11 @@ export const products: Product[] = [
     size: "32oz",
     subtitle:
       "Balanced option for mixed reefs and hobbyists who want more coverage without stepping up to the largest bottle.",
-    priceLabel: "$27.99",
+    priceLabel: "$25.99",
     priceIdEnv: "STRIPE_PRICE_PHYTO_32OZ",
     bullets: [
       "Most versatile size",
-      "Cold-chain packed",
+      "Shipping included",
       "Great fit for consistent weekly routines",
     ],
     bestFor: "Most mixed reefs and repeat customers",
@@ -56,7 +56,7 @@ export const products: Product[] = [
     priceIdEnv: "STRIPE_PRICE_PHYTO_64OZ",
     bullets: [
       "Best value per ounce",
-      "Cold-chain packed",
+      "Shipping included",
       "Built for larger reefs and heavier feeding demand",
     ],
     bestFor: "Large reefs, heavier feeding, and fewer reorders",
